@@ -42,6 +42,16 @@ First-time Instagram login (one time only):
 node scripts/setup.js
 ```
 
+## 🖥️ Web GUI (recommended)
+
+Start a local web UI with all features in one place:
+
+```bash
+npm run gui
+```
+
+Opens `http://localhost:3456` in your browser. No terminal needed — tabs for inspirations, generation, publishing, analytics, and settings.
+
 ## Quick workflow
 
 ```bash

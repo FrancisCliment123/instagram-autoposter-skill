@@ -201,6 +201,70 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
     } catch {}
   }
 
+  // IMPORTANT: Force 4:5 aspect ratio.
+  // Instagram web defaults the crop to 1:1 (square), which makes 4:5 slides look small.
+  // We click the crop/select icon and then pick 4:5 (or "Original") so the full slide shows.
+  console.error('[post] Setting crop to 4:5...');
+  try {
+    // Step 1: click the "Select crop" icon (bottom-left of the preview)
+    const cropOpened = await page.evaluate(() => {
+      const candidates = [
+        '[aria-label*="Select crop" i]',
+        '[aria-label*="Seleccionar recorte" i]',
+        '[aria-label*="Recortar" i]',
+        '[aria-label*="Crop" i]',
+      ];
+      for (const sel of candidates) {
+        const el = document.querySelector(sel);
+        if (el) {
+          // Click the nearest clickable ancestor
+          let n = el;
+          while (n && !(n.tagName === 'BUTTON' || n.getAttribute('role') === 'button')) {
+            n = n.parentElement;
+          }
+          (n || el).click();
+          return sel;
+        }
+      }
+      return null;
+    });
+    if (cropOpened) {
+      console.error(`[post] Opened crop menu via "${cropOpened}"`);
+      await humanDelay(800, 1200);
+
+      // Step 2: click the "4:5" option (or "Original" as fallback)
+      const cropChoice = await page.evaluate(() => {
+        const targets = ['4:5', 'Original'];
+        // Look in spans and divs for exact text match
+        const all = Array.from(document.querySelectorAll('span, div'));
+        for (const t of targets) {
+          for (const el of all) {
+            if (el.textContent?.trim() === t && el.offsetParent !== null) {
+              let n = el;
+              while (n && !(n.tagName === 'BUTTON' || n.getAttribute('role') === 'button')) {
+                n = n.parentElement;
+                if (!n) break;
+              }
+              (n || el).click();
+              return t;
+            }
+          }
+        }
+        return null;
+      });
+      if (cropChoice) {
+        console.error(`[post] Selected crop: "${cropChoice}"`);
+      } else {
+        console.error('[post] No crop option found — continuing with default');
+      }
+      await humanDelay(800, 1200);
+    } else {
+      console.error('[post] No crop icon found — continuing (slide may appear square)');
+    }
+  } catch (e) {
+    console.error(`[post] Crop setting skipped: ${e.message}`);
+  }
+
   // Click Next (may need 2-3 times: crop -> filter -> caption)
   for (let i = 0; i < 3; i++) {
     try {

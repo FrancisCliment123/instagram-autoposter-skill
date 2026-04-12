@@ -1,6 +1,6 @@
 ---
 name: instagram-autoposter
-version: "3.3.0"
+version: "3.4.0"
 description: "End-to-end Instagram content engine for founders and marketers. Save competitor posts as inspiration, analyze them with Gemini Vision, generate on-brand carousel slides with Nano Banana 2, convert slides to Reels video, and publish carousels/reels/photos through a dedicated browser bot (your regular Chrome stays open). Read engagement metrics and iterate. No Facebook app review needed. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post carousel, generate carousel, nano banana, ig inspiration, ig analytics, slides to reel."
 argument-hint: 'instagram-autoposter analyze <instagram_url>'
 allowed-tools: Bash, Read, Write
@@ -39,6 +39,24 @@ This skill turns one IG post you admire into a finished post on your own account
 ```
 
 Everything runs locally. Uses your own Chrome (not your API keys) for Instagram actions, and the Gemini API for analysis + image generation.
+
+## 🆕 Web GUI (recommended way to use this)
+
+Run once:
+```bash
+npm install    # (first time only)
+npm run gui
+```
+
+Your browser opens at `http://localhost:3456` with a simple visual interface — no terminal needed. Five tabs:
+
+- **Inspirations** — paste IG URLs, analyze them, see the briefs
+- **Generate** — pick an analyzed inspiration, name the carousel, click Generate
+- **Publish** — preview slides, write caption, publish as Carousel / Photo / Reel, or Stage to your phone
+- **Analytics** — profile stats and top 10 posts
+- **Settings** — run first-time IG login, see status
+
+The CLI scripts below still work — the GUI is just a friendly wrapper.
 
 ---
 

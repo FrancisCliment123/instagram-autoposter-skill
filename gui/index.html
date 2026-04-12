@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Instagram Autoposter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <h1>📸 Instagram Autoposter</h1>
+  <nav>
+    <button class="tab active" data-tab="inspirations">Inspirations</button>
+    <button class="tab" data-tab="generate">Generate</button>
+    <button class="tab" data-tab="publish">Publish</button>
+    <button class="tab" data-tab="analytics">Analytics</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- INSPIRATIONS -->
+<section id="tab-inspirations" class="tab-content active">
+  <h2>Save & analyze Instagram posts</h2>
+  <p class="muted">Paste any public Instagram post URL. We'll analyze its structure with Gemini Vision and turn it into a brief for your brand.</p>
+
+  <div class="row">
+    <input type="text" id="insp-url" placeholder="https://instagram.com/p/ABC123/">
+    <input type="text" id="insp-notes" placeholder="Optional notes">
+    <button onclick="saveInspiration()">Save</button>
+  </div>
+
+  <div id="inspirations-list"></div>
+</section>
+
+<!-- GENERATE -->
+<section id="tab-generate" class="tab-content">
+  <h2>Generate a new carousel</h2>
+  <p class="muted">Pick an analyzed inspiration and Nano Banana 2 will generate 5 on-brand slides matching its style.</p>
+
+  <div class="row">
+    <select id="gen-from">
+      <option value="">— pick an analyzed inspiration —</option>
+    </select>
+    <input type="text" id="gen-name" placeholder="Name for this carousel (e.g. hook-test-1)">
+    <button onclick="generateCarousel()">Generate</button>
+  </div>
+
+  <details style="margin-top: 16px;">
+    <summary>Advanced: custom prompts</summary>
+    <p class="muted">One prompt per line. Each line becomes a slide.</p>
+    <textarea id="gen-prompts" rows="6" placeholder="Slide 1 prompt...\nSlide 2 prompt..."></textarea>
+    <button onclick="generateFromPrompts()">Generate from prompts</button>
+  </details>
+
+  <div id="gen-log" class="log"></div>
+</section>
+
+<!-- PUBLISH -->
+<section id="tab-publish" class="tab-content">
+  <h2>Publish</h2>
+  <p class="muted">Preview a generated carousel, write the caption, and publish directly or stage for mobile (so you can add trending music).</p>
+
+  <div id="carousels-list"></div>
+</section>
+
+<!-- ANALYTICS -->
+<section id="tab-analytics" class="tab-content">
+  <h2>Analytics</h2>
+  <p class="muted">Read your own posts' metrics and find what's working.</p>
+
+  <div class="row">
+    <button onclick="loadProfile()">Profile stats</button>
+    <button onclick="loadTop()">Top 10 posts</button>
+  </div>
+
+  <pre id="analytics-output" class="log"></pre>
+</section>
+
+<!-- SETTINGS -->
+<section id="tab-settings" class="tab-content">
+  <h2>Settings</h2>
+
+  <div class="card">
+    <h3>Instagram login</h3>
+    <p class="muted">Run once. Opens a dedicated bot Chrome window where you log into Instagram. Your regular Chrome is untouched.</p>
+    <button onclick="runSetup()">Run Instagram setup</button>
+    <div id="setup-log" class="log"></div>
+  </div>
+
+  <div class="card">
+    <h3>Status</h3>
+    <div id="status"></div>
+  </div>
+</section>
+
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

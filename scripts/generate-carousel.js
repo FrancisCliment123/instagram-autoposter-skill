@@ -16,6 +16,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -54,6 +55,11 @@ async function generateImage(ai, prompt, referenceImages = [], maxRetries = 2) {
       const result = await ai.models.generateContent({
         model: 'gemini-3.1-flash-image-preview',
         contents: [{ role: 'user', parts }],
+        config: {
+          // Force 4:5 portrait aspect ratio at the API level — more reliable
+          // than asking for it in the prompt alone.
+          imageConfig: { aspectRatio: '4:5' },
+        },
       });
 
       // Check for safety/quality blocks explicitly
@@ -136,7 +142,10 @@ async function main() {
     console.error('[generate] Loaded inspiration analysis');
 
     // Build a CONCISE shared style spec (keep it short — long prompts hurt Nano Banana)
-    const style = `STYLE: Minimalist Instagram carousel slide, 1080x1350 vertical (4:5 aspect). Clean off-white background with subtle faint grid pattern (like notebook paper). Typography blend: elegant serif for large centered headlines, modern sans-serif for body text. Color palette: soft navy blue and sage green accents on neutral cream/white base. Aspirational but minimal. Small "WealthMaia" wordmark in top-right corner. No photos of real people. No logos of real brands. Digital illustration style only.`;
+    // CRITICAL: explicit aspect ratio + safe zones so text never gets cropped by Instagram's UI overlays
+    const style = `FORMAT: Vertical 4:5 aspect ratio, 1080x1350 pixels. NOT square, NOT widescreen. Portrait orientation.
+SAFE ZONES: All text and key visual elements MUST be inside the central 80% of the frame. Leave at least 150px empty margin on top, bottom, left, and right. The top 12% and bottom 18% of the slide will be covered by Instagram's UI (profile name, like/comment icons, pagination dots) — NEVER place text or logos in those zones.
+STYLE: Minimalist Instagram carousel slide. Clean off-white background with subtle faint grid pattern (like notebook paper). Typography: elegant serif for large centered headlines, modern sans-serif for body text. Color palette: soft navy blue and sage green accents on neutral cream/white base. Aspirational but minimal. Small "WealthMaia" wordmark placed well inside the safe zone (around the inner top area, not touching the edge). No photos of real people. No brand logos. Digital illustration style only.`;
 
     // Custom adaptation — WealthMaia-specific, no ambiguity
     prompts = [
@@ -175,7 +184,23 @@ async function main() {
     console.error(`[generate] (${i + 1}/${prompts.length}) ${fname}...`);
     try {
       const { buffer } = await generateImage(ai, prompt, referenceImages);
-      fs.writeFileSync(fpath, buffer);
+
+      // Normalize to EXACT 1080x1350 (4:5). Nano Banana often returns square
+      // or off-spec dimensions, which causes Instagram to crop the edges.
+      const targetW = 1080;
+      const targetH = 1350;
+      const bgColor = { r: 245, g: 243, b: 234, alpha: 1 }; // #F5F3EA — matches our cream style
+
+      const meta = await sharp(buffer).metadata();
+      console.error(`  source is ${meta.width}x${meta.height}; normalizing to ${targetW}x${targetH} (pad if needed)`);
+      // ALWAYS use 'contain' so we never crop. If the source ratio is off,
+      // we pad with the cream background color — no pixels are lost.
+      const normalizedBuffer = await sharp(buffer)
+        .resize(targetW, targetH, { fit: 'contain', background: bgColor })
+        .png()
+        .toBuffer();
+
+      fs.writeFileSync(fpath, normalizedBuffer);
       results.push({ slide: i + 1, file: fpath, prompt: prompt.slice(0, 120), success: true });
       console.error(`  saved ${fpath}`);
     } catch (err) {
