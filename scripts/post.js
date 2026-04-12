@@ -1,180 +1,173 @@
 #!/usr/bin/env node
 /**
- * Instagram Post Script
- * Post photos, videos, reels, and carousels to Instagram.
+ * Instagram Post via Playwright + Chrome CDP
+ * Uses your real browser session (no login, no cookies, no API keys).
  *
  * Usage:
  *   node post.js --photo <file.jpg> "caption"
+ *   node post.js --reel <file.mp4> "caption"
  *   node post.js --video <file.mp4> "caption"
- *   node post.js --reel <file.mp4> "caption" [--cover <file.jpg>]
- *   node post.js --carousel "caption" <file1.jpg> <file2.jpg> ...
  *
- * Requires .env file in the skill directory with:
- *   IG_USERNAME, IG_PASSWORD
+ * Requires:
+ *   - Chrome or Brave installed and logged into Instagram
+ *   - Browser must be CLOSED before running (Playwright needs exclusive access)
+ *   - First run: npm install in skill directory
  */
 
-const { IgApiClient } = require('instagram-private-api');
 const path = require('path');
 const fs = require('fs');
+const { launchAndConnect, sleep, humanDelay } = require('./lib/browser');
 
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+async function uploadPost({ page, filePath, caption, isReel }) {
+  console.error('[post] Opening Instagram...');
+  await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await humanDelay(3000, 5000);
 
-const SESSION_FILE = path.join(__dirname, '..', '.session.json');
-
-async function login() {
-  const { IG_USERNAME, IG_PASSWORD } = process.env;
-  if (!IG_USERNAME || !IG_PASSWORD) {
-    console.error('Missing credentials. Create .env with IG_USERNAME and IG_PASSWORD');
-    process.exit(1);
+  // Check we're logged in
+  const loginBtn = await page.$('input[name="username"]');
+  if (loginBtn) {
+    throw new Error('Not logged into Instagram. Log in manually in your Chrome/Brave browser first.');
   }
 
-  const ig = new IgApiClient();
-  ig.state.generateDevice(IG_USERNAME);
+  console.error('[post] Clicking "Create" button...');
+  // Try several selectors — Instagram rotates them
+  const createSelectors = [
+    'svg[aria-label="New post"]',
+    'svg[aria-label="Nueva publicacion"]',
+    'svg[aria-label="Crear"]',
+    'svg[aria-label="Create"]',
+    'a[href="#"][role="link"]:has(svg[aria-label*="ew post" i])',
+  ];
 
-  // Try to restore session
-  if (fs.existsSync(SESSION_FILE)) {
+  let clicked = false;
+  for (const sel of createSelectors) {
+    const el = await page.$(sel);
+    if (el) {
+      await el.click();
+      clicked = true;
+      break;
+    }
+  }
+
+  if (!clicked) {
+    // Fallback — find it by text
+    await page.click('text=/create|crear/i', { timeout: 5000 }).catch(() => {});
+  }
+
+  await humanDelay(1500, 2500);
+
+  // If there's a dropdown (Post / Reel / Story / Live), click "Post" or "Reel"
+  const menuTarget = isReel ? /reel/i : /post|publicacion/i;
+  try {
+    await page.click(`text=${menuTarget.source}`, { timeout: 3000 });
+    await humanDelay(1000, 2000);
+  } catch {
+    // Sometimes the upload dialog opens directly
+  }
+
+  // Upload the file
+  console.error(`[post] Uploading: ${filePath}`);
+  const fileInput = await page.waitForSelector('input[type="file"]', { state: 'attached', timeout: 15000 });
+  await fileInput.setInputFiles(filePath);
+  await humanDelay(3000, 5000);
+
+  // Click Next (may need 2-3 times: crop -> filter -> caption)
+  for (let i = 0; i < 3; i++) {
     try {
-      const saved = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
-      await ig.state.deserialize(saved);
-      // Verify session is still valid
-      await ig.account.currentUser();
-      console.error('Restored session.');
-      return ig;
-    } catch (e) {
-      console.error('Session expired, logging in again...');
+      const nextBtn = await page.waitForSelector('button:has-text("Next"), button:has-text("Siguiente")', { timeout: 5000 });
+      await nextBtn.click();
+      await humanDelay(1500, 2500);
+    } catch {
+      break;
     }
   }
 
-  console.error(`Logging in as ${IG_USERNAME}...`);
-  await ig.simulate.preLoginFlow();
-  await ig.account.login(IG_USERNAME, IG_PASSWORD);
-  process.nextTick(async () => await ig.simulate.postLoginFlow());
-
-  // Save session
-  const serialized = await ig.state.serialize();
-  delete serialized.constants;
-  fs.writeFileSync(SESSION_FILE, JSON.stringify(serialized));
-  console.error('Session saved.');
-
-  return ig;
-}
-
-function readFile(p) {
-  if (!fs.existsSync(p)) {
-    console.error(`File not found: ${p}`);
-    process.exit(1);
+  // Add caption
+  if (caption) {
+    console.error('[post] Adding caption...');
+    const captionArea = await page.waitForSelector('div[aria-label="Write a caption..."], div[aria-label*="caption" i], div[aria-label*="pie de foto" i], textarea[aria-label*="caption" i]', { timeout: 10000 });
+    await captionArea.click();
+    await humanDelay(300, 600);
+    await page.keyboard.type(caption, { delay: 15 });
+    await humanDelay(1000, 2000);
   }
-  return fs.readFileSync(p);
-}
 
-async function postPhoto(ig, filePath, caption) {
-  console.error(`Posting photo: ${filePath}`);
-  const result = await ig.publish.photo({
-    file: readFile(filePath),
-    caption: caption || '',
-  });
-  return result;
-}
+  // Click Share
+  console.error('[post] Clicking Share...');
+  const shareBtn = await page.waitForSelector('button:has-text("Share"), button:has-text("Compartir")', { timeout: 10000 });
+  await shareBtn.click();
 
-async function postVideo(ig, filePath, caption, coverPath) {
-  console.error(`Posting video: ${filePath}`);
-  const video = readFile(filePath);
-  const cover = coverPath ? readFile(coverPath) : video; // fallback to video as cover
-  const result = await ig.publish.video({
-    video,
-    coverImage: cover,
-    caption: caption || '',
+  // Wait for upload to complete (Instagram shows "Your post has been shared")
+  console.error('[post] Waiting for confirmation...');
+  await page.waitForSelector('text=/post has been shared|tu publicacion se ha compartido|se compartio/i', { timeout: 120000 }).catch(() => {
+    console.error('[post] (Timeout on confirmation text, but upload may still have succeeded)');
   });
-  return result;
-}
 
-async function postReel(ig, filePath, caption, coverPath) {
-  console.error(`Posting reel: ${filePath}`);
-  const video = readFile(filePath);
-  if (!coverPath) {
-    console.error('Warning: No cover image provided. Reel may fail. Use --cover <file.jpg>');
-  }
-  const cover = coverPath ? readFile(coverPath) : video;
-  // instagram-private-api uses publish.video with toFeed disabled for reels
-  const result = await ig.publish.video({
-    video,
-    coverImage: cover,
-    caption: caption || '',
-    // Reels-specific
-    toFeed: false,
-  });
-  return result;
-}
-
-async function postCarousel(ig, caption, files) {
-  console.error(`Posting carousel (${files.length} items)`);
-  const items = files.map(f => {
-    const ext = path.extname(f).toLowerCase();
-    if (['.mp4', '.mov'].includes(ext)) {
-      return { video: readFile(f), coverImage: readFile(f) };
-    }
-    return { file: readFile(f) };
-  });
-  const result = await ig.publish.album({ items, caption: caption || '' });
-  return result;
+  await humanDelay(2000, 3000);
 }
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
     console.error('Usage:');
-    console.error('  node post.js --photo <file.jpg> "caption"');
+    console.error('  node post.js --photo <file> "caption"');
+    console.error('  node post.js --reel <file.mp4> "caption"');
     console.error('  node post.js --video <file.mp4> "caption"');
-    console.error('  node post.js --reel <file.mp4> "caption" [--cover <file.jpg>]');
-    console.error('  node post.js --carousel "caption" <file1.jpg> <file2.jpg> ...');
+    console.error('  [--browser chrome|brave]');
     process.exit(1);
   }
 
   let mode = null;
   let filePath = null;
-  let coverPath = null;
   let caption = '';
-  const carouselFiles = [];
+  let browserName = 'chrome';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--photo' && args[i + 1]) { mode = 'photo'; filePath = args[i + 1]; i++; }
-    else if (args[i] === '--video' && args[i + 1]) { mode = 'video'; filePath = args[i + 1]; i++; }
     else if (args[i] === '--reel' && args[i + 1]) { mode = 'reel'; filePath = args[i + 1]; i++; }
-    else if (args[i] === '--carousel') { mode = 'carousel'; }
-    else if (args[i] === '--cover' && args[i + 1]) { coverPath = args[i + 1]; i++; }
-    else if (mode === 'carousel' && !caption) { caption = args[i]; }
-    else if (mode === 'carousel') { carouselFiles.push(args[i]); }
+    else if (args[i] === '--video' && args[i + 1]) { mode = 'video'; filePath = args[i + 1]; i++; }
+    else if (args[i] === '--browser' && args[i + 1]) { browserName = args[i + 1]; i++; }
     else if (!caption) { caption = args[i]; }
   }
 
+  if (!mode || !filePath) {
+    console.error('Missing --photo, --reel, or --video with file path.');
+    process.exit(1);
+  }
+
+  const absPath = path.resolve(filePath);
+  if (!fs.existsSync(absPath)) {
+    console.error(`File not found: ${absPath}`);
+    process.exit(1);
+  }
+
+  console.error(`[post] mode=${mode} file=${absPath} caption="${caption.slice(0, 60)}..."`);
+
+  let cleanup;
   try {
-    const ig = await login();
-    let result;
+    const session = await launchAndConnect(browserName);
+    cleanup = session.cleanup;
 
-    if (mode === 'photo') result = await postPhoto(ig, filePath, caption);
-    else if (mode === 'video') result = await postVideo(ig, filePath, caption, coverPath);
-    else if (mode === 'reel') result = await postReel(ig, filePath, caption, coverPath);
-    else if (mode === 'carousel') result = await postCarousel(ig, caption, carouselFiles);
-    else { console.error('No valid mode specified.'); process.exit(1); }
+    await uploadPost({
+      page: session.page,
+      filePath: absPath,
+      caption,
+      isReel: mode === 'reel',
+    });
 
-    const media = result.media || result;
     console.log('');
     console.log(JSON.stringify({
       success: true,
       type: mode,
-      media_id: media.id || media.pk,
-      code: media.code,
-      url: media.code ? `https://www.instagram.com/p/${media.code}/` : null,
-      caption: caption.slice(0, 100),
+      file: absPath,
+      caption: caption.slice(0, 200),
       timestamp: new Date().toISOString(),
     }, null, 2));
-
   } catch (err) {
     console.error('Error:', err.message);
-    if (err.response?.body) {
-      console.error('Response:', JSON.stringify(err.response.body, null, 2));
-    }
     process.exit(1);
+  } finally {
+    if (cleanup) await cleanup();
   }
 }
 

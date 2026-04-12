@@ -1,7 +1,7 @@
 ---
 name: instagram-autoposter
-version: "1.0.0"
-description: "Post reels, videos, photos, and carousels to Instagram. Read engagement metrics (likes, comments, views, saves, shares) and analyze top-performing content to decide what to post next. Uses instagram-private-api (no official Meta API review required). TRIGGER: instagram, post reel, post video, instagram analytics, ig metrics, instagram post, carousel."
+version: "2.0.0"
+description: "Post reels, videos, and photos to Instagram via Playwright + Chrome CDP (uses your real browser session). Read engagement metrics from your posts. No login, no cookies, no API keys — just your logged-in browser. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post video, instagram analytics, ig metrics, instagram post."
 argument-hint: 'instagram-autoposter --reel video.mp4 "caption"'
 allowed-tools: Bash, Read, Write
 user-invocable: true
@@ -23,126 +23,114 @@ metadata:
       - posting
       - analytics
       - automation
+      - playwright
 ---
 
-# Instagram Autoposter — Post + Analyze
+# Instagram Autoposter — Playwright Browser Automation
 
-Post reels, videos, photos, and carousels to Instagram. Analyze engagement metrics to figure out what to post next. No official Meta API review needed.
+Post reels, photos, and videos to Instagram. Read engagement metrics. Uses Playwright to drive your real Chrome/Brave browser — no login, no API keys, no cookies. Instagram sees your genuine logged-in session, so no checkpoint triggers.
 
 ## Setup
 
-1. Create `~/.claude/skills/instagram-autoposter/.env`:
+1. Install Chrome or Brave and log into Instagram manually
+2. Run `npm install` in `~/.claude/skills/instagram-autoposter/`
+3. Done. No `.env`, no credentials needed.
 
-```
-IG_USERNAME=your_username
-IG_PASSWORD=your_password
-```
-
-2. Install: `npm install` in `~/.claude/skills/instagram-autoposter/`
-
-3. First run will trigger a login. If 2FA is enabled, you may need to approve from your phone. Session is cached in `.session.json` (gitignored) so subsequent runs skip login.
+**Works on Windows, macOS, and Linux** — auto-detects platform and finds your browser automatically.
 
 ## 1. Post content: `post.js`
 
-### Post a reel (most common for growth)
+### Post a reel
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --reel video.mp4 "caption here #hashtags" --cover cover.jpg
+node ~/.claude/skills/instagram-autoposter/scripts/post.js --reel video.mp4 "caption with #hashtags"
 ```
 
 ### Post a photo
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --photo image.jpg "caption here"
+node ~/.claude/skills/instagram-autoposter/scripts/post.js --photo image.jpg "caption"
 ```
 
-### Post a video (feed video, not reel)
+### Post a video (feed, not reel)
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --video video.mp4 "caption" --cover cover.jpg
+node ~/.claude/skills/instagram-autoposter/scripts/post.js --video video.mp4 "caption"
 ```
 
-### Post a carousel
+### Use Brave instead of Chrome
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --carousel "caption" img1.jpg img2.jpg img3.jpg
+node ~/.claude/skills/instagram-autoposter/scripts/post.js --reel video.mp4 "caption" --browser brave
 ```
 
-**IMPORTANT:** Always show the user the caption and confirm before posting. Never auto-post without explicit approval.
+**IMPORTANT:**
+- The browser (Chrome or Brave) must be **CLOSED** before running — Playwright needs exclusive access
+- You must be **logged into Instagram** in that browser
+- Always show user the caption and confirm before posting. Never auto-post.
 
 ## 2. Analytics: `analytics.js`
 
-### Your last 20 posts with metrics
-
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js
-```
-
-### Your top 10 posts by engagement
-
-```bash
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --top 10
-```
-
-### Reels-only analysis
-
-```bash
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --reels-only --count 50
-```
-
-### Profile stats
-
-```bash
+# Profile stats (username, followers, post count)
 node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --profile
+
+# Your last 12 posts with metrics
+node ~/.claude/skills/instagram-autoposter/scripts/analytics.js
+
+# Your top 10 posts by engagement
+node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --top 10
+
+# Last 30 posts
+node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --count 30
+
+# Reels only
+node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --reels-only --count 30
 ```
 
-### Single post details
-
-```bash
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --media <media_id>
-```
-
-Returns:
+Returns JSON with:
 - `user`: username, followers, post count
-- `summary`: totals, averages, by_type breakdown, best_posting_hours_utc, best_posting_days, best_post
-- `posts[]`: each post with type, caption, hashtags, created_at, day_of_week, hour_utc, full metrics, and `engagement_score`
+- `posts[]`: each post with type (reel/post), caption, hashtags, created_at, day_of_week, hour_utc, metrics (likes, comments, views), `engagement_score`
+- `summary`: totals, averages, best_posting_hours_utc, best_posting_days, best_post
 
-**Engagement score formula:** `likes×1 + comments×5 + saves×10 + shares×15 + views×0.01`
+**Engagement score**: `likes×1 + comments×5 + saves×10 + shares×15 + views×0.01` — weights what Instagram's algorithm rewards (deep engagement > vanity metrics).
 
-This weights saves and shares higher because they signal high-value content that drives Instagram's algorithm. The score helps the agent identify what content style is actually working.
+**Note**: Saves and shares aren't visible from the public web (they require the Instagram Insights API for Business accounts). The engagement_score calculation handles this gracefully by using 0 when unavailable.
 
 ## Workflow — Post, Analyze, Decide Next Reel
 
 ```
-1. User uploads a reel with post.js
-2. Wait 24-48 hours for metrics to stabilize
-3. Run analytics.js --top 10 to see which reels performed best
-4. Agent analyzes patterns:
-   - What topics/themes in top reels?
-   - What hook style?
-   - What hashtags?
-   - What posting times?
-   - What caption length?
-5. Agent drafts next reel concept based on patterns
-6. User approves → post.js publishes
+1. post.js --reel your-video.mp4 "caption"
+2. Wait 24-48h for metrics to stabilize
+3. analytics.js --top 10  →  see what's working
+4. Agent analyzes: hooks, topics, hashtags, posting times
+5. Agent drafts next reel concept
+6. You approve → post.js publishes
 7. Loop
 ```
 
-## Safety Notes (Important)
+## Platform Notes
 
-This skill uses `instagram-private-api` (unofficial). To minimize ban risk:
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Chrome path | `AppData\Local\Google\Chrome\...` | `/Applications/Google Chrome.app/...` | `/usr/bin/google-chrome` |
+| Profile dir | `User Data` | `~/Library/Application Support/Google/Chrome` | `~/.config/google-chrome` |
+| Process kill | `taskkill /F /IM` | `pkill -f` | `pkill -f` |
+| Profile link | junction (`mklink /J`) | symlink (`ln -s`) | symlink (`ln -s`) |
 
-- **Post only**: Don't use this for follow/unfollow loops, mass DMs, or auto-commenting on other accounts
-- **Stay under 3 posts/day** on a warmed-up account
-- **Don't post from new accounts**: account should be 30+ days old with organic activity first
-- **Randomize timing**: avoid posting every day at exactly the same second
-- **Session caching**: keeps login events minimal (each login is a risk signal)
-- **If you get a "suspicious activity" challenge**: log in from your phone to clear it
+All handled automatically by `scripts/lib/browser.js`.
 
-## Notes
+## Troubleshooting
 
-- **.env and .session.json** are gitignored — your credentials stay local
-- **2FA**: if enabled, first login may require phone approval
-- **File formats**: MP4 for video/reels, JPG for photos
-- **Reel requirements**: vertical (9:16), max 90 seconds, under 100MB
-- **If Instagram breaks the library**: run `npm update instagram-private-api`
+- **"Not logged into Instagram"** → Open Chrome manually, log into Instagram, close it, run again.
+- **Browser doesn't close** → Make sure you're not running the browser as another user or elevated.
+- **Instagram changed their DOM** → Update selectors in `post.js` (search for `text=/create|crear/i` and similar).
+- **"Timed out waiting for browser"** → Another process may be using port 9223. Kill it or change `DEBUG_PORT` in `scripts/lib/browser.js`.
+
+## Safety
+
+This approach uses your real browser session, which is the safest method:
+- No login endpoint calls (no checkpoint triggers)
+- No cookie-based API calls (no pattern detection)
+- Instagram sees literally your Chrome doing what you'd do manually
+- Still: stay under 3-5 posts/day, don't automate likes/follows/comments on others' content
