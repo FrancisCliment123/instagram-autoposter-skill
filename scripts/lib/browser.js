@@ -16,6 +16,13 @@ const http = require('http');
 const platform = os.platform();
 const DEBUG_PORT = 9223; // different port from Reddit skill to avoid conflicts
 
+/**
+ * Dedicated bot profile path — OUTSIDE the user's real Chrome profile.
+ * This lets the user keep their normal Chrome open while the bot runs.
+ * The profile persists between runs (login happens once, in setup).
+ */
+const BOT_PROFILE_DIR = path.join(os.homedir(), '.instagram-bot-profile');
+
 function getBrowserPaths() {
   if (platform === 'darwin') {
     return {
@@ -24,8 +31,6 @@ function getBrowserPaths() {
           '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
           path.join(os.homedir(), 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome'),
         ],
-        userDataDir: path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome'),
-        linkDir: path.join(os.tmpdir(), 'chrome-ig-debug-profile'),
         processName: 'Google Chrome',
       },
       brave: {
@@ -33,8 +38,6 @@ function getBrowserPaths() {
           '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
           path.join(os.homedir(), 'Applications', 'Brave Browser.app', 'Contents', 'MacOS', 'Brave Browser'),
         ],
-        userDataDir: path.join(os.homedir(), 'Library', 'Application Support', 'BraveSoftware', 'Brave-Browser'),
-        linkDir: path.join(os.tmpdir(), 'brave-ig-debug-profile'),
         processName: 'Brave Browser',
       },
     };
@@ -44,14 +47,10 @@ function getBrowserPaths() {
     return {
       chrome: {
         exe: ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/snap/bin/chromium'],
-        userDataDir: path.join(os.homedir(), '.config', 'google-chrome'),
-        linkDir: path.join(os.tmpdir(), 'chrome-ig-debug-profile'),
         processName: 'chrome',
       },
       brave: {
         exe: ['/usr/bin/brave-browser', '/usr/bin/brave-browser-stable', '/snap/bin/brave'],
-        userDataDir: path.join(os.homedir(), '.config', 'BraveSoftware', 'Brave-Browser'),
-        linkDir: path.join(os.tmpdir(), 'brave-ig-debug-profile'),
         processName: 'brave',
       },
     };
@@ -65,8 +64,6 @@ function getBrowserPaths() {
         'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
       ],
-      userDataDir: path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data'),
-      linkDir: path.join(os.homedir(), 'AppData', 'Local', 'Temp', 'chrome-ig-debug-profile'),
       processName: 'chrome.exe',
     },
     brave: {
@@ -74,8 +71,6 @@ function getBrowserPaths() {
         path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
         'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
       ],
-      userDataDir: path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
-      linkDir: path.join(os.homedir(), 'AppData', 'Local', 'Temp', 'brave-ig-debug-profile'),
       processName: 'brave.exe',
     },
   };
@@ -89,30 +84,30 @@ function findExe(name) {
   return null;
 }
 
-function killBrowser(processName) {
+/**
+ * Kill ONLY the bot's browser instance (by matching the bot profile path in cmdline).
+ * Leaves the user's normal Chrome running.
+ */
+function killBotBrowser() {
   try {
     if (platform === 'win32') {
-      execSync(`taskkill /F /IM ${processName} 2>NUL`, { stdio: 'ignore', shell: true });
+      // On Windows, use WMIC to find processes with our bot profile path and kill by PID
+      try {
+        const escaped = BOT_PROFILE_DIR.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const out = execSync(
+          `wmic process where "CommandLine like '%${escaped}%'" get ProcessId /FORMAT:VALUE`,
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: true, timeout: 5000 }
+        );
+        const pids = out.split('\n').map(l => l.match(/ProcessId=(\d+)/)?.[1]).filter(Boolean);
+        pids.forEach(pid => {
+          try { execSync(`taskkill /F /PID ${pid} 2>NUL`, { stdio: 'ignore', shell: true }); } catch {}
+        });
+      } catch {}
     } else {
-      execSync(`pkill -f "${processName}" 2>/dev/null`, { stdio: 'ignore', shell: true });
+      // macOS / Linux — pkill with full command line match of our bot profile dir
+      execSync(`pkill -f "${BOT_PROFILE_DIR}" 2>/dev/null`, { stdio: 'ignore', shell: true });
     }
   } catch {}
-}
-
-function createLink(target, linkPath) {
-  try {
-    if (platform === 'win32') {
-      execSync(`rmdir "${linkPath}" 2>NUL`, { stdio: 'ignore', shell: true });
-    } else {
-      execSync(`rm -f "${linkPath}" 2>/dev/null`, { stdio: 'ignore', shell: true });
-    }
-  } catch {}
-
-  if (platform === 'win32') {
-    execSync(`mklink /J "${linkPath}" "${target}"`, { stdio: 'ignore', shell: true });
-  } else {
-    execSync(`ln -s "${target}" "${linkPath}"`, { stdio: 'ignore', shell: true });
-  }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -141,30 +136,40 @@ function waitForDebugger(port, maxWait = 25000) {
 }
 
 /**
- * Launch browser, connect Playwright, return { browser, page, cleanup }.
- * Caller MUST call cleanup() when done.
+ * Launch a DEDICATED bot browser (separate profile from the user's regular Chrome).
+ * The user's normal Chrome stays open and untouched.
+ *
+ * Options:
+ *   browserName: 'chrome' | 'brave'
+ *   headless: if true, runs without a visible window (only set after setup is done)
+ *   interactive: if true, keeps the browser open for manual interaction (used by setup)
  */
-async function launchAndConnect(browserName = 'chrome') {
+async function launchAndConnect(opts = {}) {
+  const { browserName = 'chrome', interactive = false } = opts;
+
   const config = BROWSER_PATHS[browserName];
   if (!config) throw new Error(`Unknown browser: ${browserName}. Use "chrome" or "brave".`);
 
   const exePath = findExe(browserName);
   if (!exePath) throw new Error(`${browserName} not found on this system.`);
 
-  console.error(`[browser] Closing existing ${browserName}...`);
-  killBrowser(config.processName);
-  await sleep(2000);
+  // Clean up any zombie bot browser from a previous run
+  killBotBrowser();
+  await sleep(500);
 
-  console.error('[browser] Setting up profile link...');
-  createLink(config.userDataDir, config.linkDir);
+  // Ensure the bot profile directory exists
+  if (!fs.existsSync(BOT_PROFILE_DIR)) {
+    fs.mkdirSync(BOT_PROFILE_DIR, { recursive: true });
+  }
 
-  console.error('[browser] Launching browser...');
+  console.error(`[browser] Launching bot ${browserName} (profile: ${BOT_PROFILE_DIR})...`);
   const child = spawn(exePath, [
     `--remote-debugging-port=${DEBUG_PORT}`,
-    `--user-data-dir=${config.linkDir}`,
+    `--user-data-dir=${BOT_PROFILE_DIR}`,
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-blink-features=AutomationControlled',
+    '--window-size=1280,900',
     'about:blank',
   ], { detached: true, stdio: 'ignore', shell: true });
   child.unref();
@@ -178,16 +183,19 @@ async function launchAndConnect(browserName = 'chrome') {
   const page = context.pages()[0] || await context.newPage();
 
   const cleanup = async () => {
+    if (interactive) return; // setup mode: keep browser open for manual login
     try { await browser.close(); } catch {}
-    killBrowser(config.processName);
+    killBotBrowser();
   };
 
-  return { browser, context, page, cleanup, config };
+  return { browser, context, page, cleanup, config, profileDir: BOT_PROFILE_DIR };
 }
 
 module.exports = {
   launchAndConnect,
+  killBotBrowser,
   sleep,
   humanDelay,
   platform,
+  BOT_PROFILE_DIR,
 };

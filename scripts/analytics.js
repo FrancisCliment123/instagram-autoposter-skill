@@ -251,7 +251,7 @@ async function main() {
 
   let cleanup;
   try {
-    const session = await launchAndConnect(browserName);
+    const session = await launchAndConnect({ browserName });
     cleanup = session.cleanup;
     const page = session.page;
 

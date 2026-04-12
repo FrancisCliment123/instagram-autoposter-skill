@@ -1,7 +1,7 @@
 ---
 name: instagram-autoposter
-version: "2.0.0"
-description: "Post reels, videos, and photos to Instagram via Playwright + Chrome CDP (uses your real browser session). Read engagement metrics from your posts. No login, no cookies, no API keys — just your logged-in browser. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post video, instagram analytics, ig metrics, instagram post."
+version: "2.1.0"
+description: "Post reels, videos, and photos to Instagram via Playwright + Chrome CDP. Uses a DEDICATED bot browser profile — your regular Chrome stays open and untouched. Read engagement metrics from your posts. No API keys. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post video, instagram analytics, ig metrics, instagram post."
 argument-hint: 'instagram-autoposter --reel video.mp4 "caption"'
 allowed-tools: Bash, Read, Write
 user-invocable: true
@@ -26,17 +26,33 @@ metadata:
       - playwright
 ---
 
-# Instagram Autoposter — Playwright Browser Automation
+# Instagram Autoposter — Playwright with Dedicated Bot Profile
 
-Post reels, photos, and videos to Instagram. Read engagement metrics. Uses Playwright to drive your real Chrome/Brave browser — no login, no API keys, no cookies. Instagram sees your genuine logged-in session, so no checkpoint triggers.
+Post reels, photos, and videos to Instagram. Read engagement metrics. Uses Playwright to drive a **dedicated bot browser** — your normal Chrome stays open and untouched.
 
-## Setup
+## How it works
 
-1. Install Chrome or Brave and log into Instagram manually
+- A separate Chrome profile lives at `~/.instagram-bot-profile/`
+- You log into Instagram in that profile **once** (via `setup.js`)
+- After that, `post.js` and `analytics.js` use that profile automatically
+- Your regular Chrome is never closed, never affected
+
+## Setup (one time)
+
+1. Install Chrome or Brave (if not already installed)
 2. Run `npm install` in `~/.claude/skills/instagram-autoposter/`
-3. Done. No `.env`, no credentials needed.
+3. Run the setup script:
 
-**Works on Windows, macOS, and Linux** — auto-detects platform and finds your browser automatically.
+```bash
+node ~/.claude/skills/instagram-autoposter/scripts/setup.js
+```
+
+4. A new Chrome window opens at Instagram's login page
+5. Log in (with 2FA if enabled)
+6. Once you see your feed, close that window
+7. Done! The bot profile is saved.
+
+**Works on Windows, macOS, and Linux** — auto-detects platform.
 
 ## 1. Post content: `post.js`
 
@@ -65,8 +81,8 @@ node ~/.claude/skills/instagram-autoposter/scripts/post.js --reel video.mp4 "cap
 ```
 
 **IMPORTANT:**
-- The browser (Chrome or Brave) must be **CLOSED** before running — Playwright needs exclusive access
-- You must be **logged into Instagram** in that browser
+- Your **normal Chrome can stay open** — the bot uses a separate profile
+- Run `setup.js` once before first use (see "Setup" above)
 - Always show user the caption and confirm before posting. Never auto-post.
 
 ## 2. Analytics: `analytics.js`
