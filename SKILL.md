@@ -1,8 +1,8 @@
 ---
 name: instagram-autoposter
-version: "3.0.0"
-description: "End-to-end Instagram content engine: save competitor posts as inspiration, analyze them with Gemini Vision, generate carousel images with Nano Banana (gemini-2.5-flash-image), and publish as carousels/reels/photos via Playwright browser automation. Read engagement metrics. Dedicated bot profile keeps your main Chrome free. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post carousel, instagram analytics, generate carousel, nano banana, inspiration, ig content."
-argument-hint: 'instagram-autoposter --reel video.mp4 "caption"'
+version: "3.2.0"
+description: "End-to-end Instagram content engine for founders and marketers. Save competitor posts as inspiration, analyze them with Gemini Vision, generate on-brand carousel slides with Nano Banana 2, convert slides to Reels video, and publish carousels/reels/photos through a dedicated browser bot (your regular Chrome stays open). Read engagement metrics and iterate. No Facebook app review needed. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post carousel, generate carousel, nano banana, ig inspiration, ig analytics, slides to reel."
+argument-hint: 'instagram-autoposter analyze <instagram_url>'
 allowed-tools: Bash, Read, Write
 user-invocable: true
 author: FrancisCliment123
@@ -19,203 +19,225 @@ metadata:
     tags:
       - instagram
       - reels
+      - carousel
       - social-media
       - posting
       - analytics
-      - automation
       - playwright
+      - nano-banana
+      - gemini
 ---
 
-# Instagram Autoposter — Playwright with Dedicated Bot Profile
+# Instagram Autoposter — Full Content Engine
 
-Post reels, photos, and videos to Instagram. Read engagement metrics. Uses Playwright to drive a **dedicated bot browser** — your normal Chrome stays open and untouched.
+Find what works, generate on-brand content, publish, measure, repeat.
 
-## How it works
+This skill turns one IG post you admire into a finished post on your own account:
 
-- A separate Chrome profile lives at `~/.instagram-bot-profile/`
-- You log into Instagram in that profile **once** (via `setup.js`)
-- After that, `post.js` and `analytics.js` use that profile automatically
-- Your regular Chrome is never closed, never affected
+```
+  save  →  analyze  →  generate  →  (optional) slides→reel  →  post  →  analytics
+```
 
-## Setup (one time)
+Everything runs locally. Uses your own Chrome (not your API keys) for Instagram actions, and the Gemini API for analysis + image generation.
 
-1. Install Chrome or Brave (if not already installed)
-2. Run `npm install` in `~/.claude/skills/instagram-autoposter/`
-3. Run the setup script:
+---
+
+## What's in the box
+
+| Script | Purpose |
+|---|---|
+| `setup.js` | One-time login into a dedicated bot Chrome profile |
+| `save-inspiration.js` | Save a public IG post URL you want to learn from |
+| `analyze-inspiration.js` | Download slides + run Gemini Vision to extract hook, style, structure, and an adaptation brief for your brand |
+| `generate-carousel.js` | Generate a new carousel with Nano Banana 2 (Gemini 3.1 Flash Image) using the inspiration's style as guidance |
+| `slides-to-reel.js` | Convert carousel slides into a 9:16 MP4 for Reels |
+| `post.js` | Publish a photo, video, reel, or carousel through the bot browser |
+| `analytics.js` | Read your own posts' metrics (likes, comments, views) and compute a weighted engagement score |
+
+---
+
+## Requirements
+
+- **Node.js 18+**
+- **Chrome or Brave** installed, logged into the Instagram account you want to post from (via `setup.js` below)
+- **Google Gemini API key** (free tier is fine): get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- **~500 MB disk** for Playwright + Chromium + ffmpeg-static
+
+Works on Windows, macOS, and Linux — platform is auto-detected.
+
+---
+
+## Install
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/setup.js
+git clone https://github.com/FrancisCliment123/instagram-autoposter-skill ~/.claude/skills/instagram-autoposter
+cd ~/.claude/skills/instagram-autoposter
+npm install
 ```
 
-4. A new Chrome window opens at Instagram's login page
-5. Log in (with 2FA if enabled)
-6. Once you see your feed, close that window
-7. Done! The bot profile is saved.
+Create `.env` in the skill root:
 
-**Works on Windows, macOS, and Linux** — auto-detects platform.
+```
+GOOGLE_API_KEY=your_key_here
+```
 
-## 1. Post content: `post.js`
+The `.env` file is gitignored — your key never leaves your machine.
 
-### Post a reel
+---
+
+## First-time setup (log into Instagram once)
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --reel video.mp4 "caption with #hashtags"
+node scripts/setup.js
 ```
 
-### Post a photo
+What happens:
+1. A new Chrome window opens using a **separate profile** at `~/.instagram-bot-profile/`
+2. You log into Instagram manually in that window (complete 2FA if asked)
+3. Close the window when you see your feed
+
+Your regular Chrome is never touched. The bot profile is cached forever — you won't log in again unless Instagram invalidates the session (rare, usually only after a password change).
+
+---
+
+## Typical workflow
+
+### 1. Save an IG post you like
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --photo image.jpg "caption"
+node scripts/save-inspiration.js https://www.instagram.com/p/ABC123/ "strong hook, clean grid layout"
 ```
 
-### Post a video (feed, not reel)
+### 2. Analyze it
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --video video.mp4 "caption"
+node scripts/analyze-inspiration.js ABC123
 ```
 
-### Post a carousel
+Downloads every slide to `inspirations/ABC123/` and calls Gemini Vision. Output is saved into `inspirations/index.json` and includes:
+
+- `hook` — the scroll-stopping opening
+- `structure` — how information is organized across slides
+- `visual_style` — palette, typography, layout patterns
+- `text_overlay_patterns` — headline vs body treatment
+- `why_it_works` — 3 specific reasons
+- `adaptation_brief` — concrete content idea for your brand
+
+### 3. Generate a new carousel
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --carousel "caption with #hashtags" slide-01.jpg slide-02.jpg slide-03.jpg
+node scripts/generate-carousel.js --from ABC123 --name my-first-post
 ```
 
-Carousel must have at least 2 images (max 10). Order is preserved.
+Produces 5 slides in `generated/my-first-post/slide-NN.png` using Nano Banana 2 (`gemini-3.1-flash-image-preview`).
 
-## 3. Inspiration-driven content workflow
+The prompts are built from the inspiration's analysis so the new carousel matches the visual language while carrying your brand's message.
 
-### Step 1 — Save an Instagram post/reel you want to learn from
+Alternative: pass your own prompts file or a single prompt:
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/save-inspiration.js https://instagram.com/p/ABC123 "loved the hook on slide 1"
-node ~/.claude/skills/instagram-autoposter/scripts/save-inspiration.js --list
-node ~/.claude/skills/instagram-autoposter/scripts/save-inspiration.js --remove ABC123
+node scripts/generate-carousel.js --prompts my-prompts.txt --name custom
+node scripts/generate-carousel.js --prompt "Clean minimalist slide..." --name test
 ```
 
-Saves to `inspirations/index.json`.
-
-### Step 2 — Download + analyze with Gemini Vision
+### 4. (Optional) Convert the carousel into a Reel video
 
 ```bash
-node ~/.claude/skills/instagram-autoposter/scripts/analyze-inspiration.js ABC123
-# or analyze all new ones:
-node ~/.claude/skills/instagram-autoposter/scripts/analyze-inspiration.js --all
+node scripts/slides-to-reel.js --from my-first-post --duration 4
 ```
 
-Downloads all slides to `inspirations/ABC123/` and runs Gemini Vision on them. Analysis includes:
-- Hook, structure, visual style, text overlay patterns
-- Content type, target emotion, why it works
-- **Adaptation brief**: concrete content idea for WealthMaia
+Produces `generated/my-first-post/my-first-post.mp4` — 1080×1920 vertical, 9:16, each slide on screen for 4s, padded with a cream background that matches the default slide style. Override with `--bg RRGGBB` if your palette is different.
 
-### Step 3 — Generate your carousel with Nano Banana
+### 5. Publish
+
+Carousel:
+```bash
+node scripts/post.js --carousel "your caption with #hashtags" \
+  generated/my-first-post/slide-01.png \
+  generated/my-first-post/slide-02.png \
+  generated/my-first-post/slide-03.png \
+  generated/my-first-post/slide-04.png \
+  generated/my-first-post/slide-05.png
+```
+
+Reel:
+```bash
+node scripts/post.js --reel generated/my-first-post/my-first-post.mp4 "your caption"
+```
+
+Photo or feed video:
+```bash
+node scripts/post.js --photo image.jpg "caption"
+node scripts/post.js --video clip.mp4 "caption"
+```
+
+### 6. Measure after 24-48h
 
 ```bash
-# Based on an analyzed inspiration (5 slides, uses its visual style as reference)
-node ~/.claude/skills/instagram-autoposter/scripts/generate-carousel.js --from ABC123 --name my-first-carousel
-
-# From a custom prompts file (one prompt per line = one slide)
-node ~/.claude/skills/instagram-autoposter/scripts/generate-carousel.js --prompts prompts.txt --name custom
-
-# Quick single-image test
-node ~/.claude/skills/instagram-autoposter/scripts/generate-carousel.js --prompt "A minimalist slide..." --name test
+node scripts/analytics.js --profile
+node scripts/analytics.js --top 10
+node scripts/analytics.js --reels-only --count 30
 ```
 
-Outputs to `generated/<name>/slide-NN.png` and writes a `manifest.json` with the exact post command.
+The `engagement_score` is a weighted formula (`likes×1 + comments×5 + saves×10 + shares×15 + views×0.01`) so you can see which posts actually move the algorithm, not just which got the most likes.
 
-Uses **gemini-2.5-flash-image** (Nano Banana). Requires `GOOGLE_API_KEY` in `.env` (get one free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+---
 
-### Step 4 — Post the generated carousel
+## Safety / staying unflagged
 
-```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --carousel "Your caption here" generated/my-first-carousel/slide-01.png generated/my-first-carousel/slide-02.png ...
-```
+- Only automates actions on **your own account**
+- Never automates likes, follows, comments on others, or DMs
+- Uses your real logged-in Chrome session via a dedicated profile — Instagram sees a normal user, not an API client
+- Recommended cadence: 1-3 posts per day max, spaced at least a few hours apart
+- If Instagram ever asks for a security challenge, complete it manually in the bot profile (rare)
 
-### Full workflow example
-
-```
-1. save-inspiration.js https://instagram.com/p/XYZ
-2. analyze-inspiration.js XYZ           -> analysis stored
-3. (review the adaptation_brief in inspirations/index.json)
-4. generate-carousel.js --from XYZ --name wealthmaia-post-1
-5. (review generated/wealthmaia-post-1/*.png, regenerate any slide if needed)
-6. post.js --carousel "caption" generated/wealthmaia-post-1/slide-*.png
-7. (24-48h later) analytics.js --top 10 to see what worked
-8. Repeat, leaning into winning patterns
-```
-
-### Use Brave instead of Chrome
-
-```bash
-node ~/.claude/skills/instagram-autoposter/scripts/post.js --reel video.mp4 "caption" --browser brave
-```
-
-**IMPORTANT:**
-- Your **normal Chrome can stay open** — the bot uses a separate profile
-- Run `setup.js` once before first use (see "Setup" above)
-- Always show user the caption and confirm before posting. Never auto-post.
-
-## 2. Analytics: `analytics.js`
-
-```bash
-# Profile stats (username, followers, post count)
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --profile
-
-# Your last 12 posts with metrics
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js
-
-# Your top 10 posts by engagement
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --top 10
-
-# Last 30 posts
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --count 30
-
-# Reels only
-node ~/.claude/skills/instagram-autoposter/scripts/analytics.js --reels-only --count 30
-```
-
-Returns JSON with:
-- `user`: username, followers, post count
-- `posts[]`: each post with type (reel/post), caption, hashtags, created_at, day_of_week, hour_utc, metrics (likes, comments, views), `engagement_score`
-- `summary`: totals, averages, best_posting_hours_utc, best_posting_days, best_post
-
-**Engagement score**: `likes×1 + comments×5 + saves×10 + shares×15 + views×0.01` — weights what Instagram's algorithm rewards (deep engagement > vanity metrics).
-
-**Note**: Saves and shares aren't visible from the public web (they require the Instagram Insights API for Business accounts). The engagement_score calculation handles this gracefully by using 0 when unavailable.
-
-## Workflow — Post, Analyze, Decide Next Reel
-
-```
-1. post.js --reel your-video.mp4 "caption"
-2. Wait 24-48h for metrics to stabilize
-3. analytics.js --top 10  →  see what's working
-4. Agent analyzes: hooks, topics, hashtags, posting times
-5. Agent drafts next reel concept
-6. You approve → post.js publishes
-7. Loop
-```
-
-## Platform Notes
-
-| | Windows | macOS | Linux |
-|---|---|---|---|
-| Chrome path | `AppData\Local\Google\Chrome\...` | `/Applications/Google Chrome.app/...` | `/usr/bin/google-chrome` |
-| Profile dir | `User Data` | `~/Library/Application Support/Google/Chrome` | `~/.config/google-chrome` |
-| Process kill | `taskkill /F /IM` | `pkill -f` | `pkill -f` |
-| Profile link | junction (`mklink /J`) | symlink (`ln -s`) | symlink (`ln -s`) |
-
-All handled automatically by `scripts/lib/browser.js`.
+---
 
 ## Troubleshooting
 
-- **"Not logged into Instagram"** → Open Chrome manually, log into Instagram, close it, run again.
-- **Browser doesn't close** → Make sure you're not running the browser as another user or elevated.
-- **Instagram changed their DOM** → Update selectors in `post.js` (search for `text=/create|crear/i` and similar).
-- **"Timed out waiting for browser"** → Another process may be using port 9223. Kill it or change `DEBUG_PORT` in `scripts/lib/browser.js`.
+| Problem | Fix |
+|---|---|
+| `Not logged into Instagram` | Re-run `node scripts/setup.js` and log in again |
+| `Create button not found` | Instagram UI language changed. Open an issue with the Spanish/English/your-language name of the "Create" button — selectors are easy to add in `post.js` |
+| Generated slide has duplicate or odd text | Re-run `generate-carousel.js` (Nano Banana 2 is good but occasionally off); or edit the prompt for that slide and use `--prompt "..." --name xyz-slideN` |
+| `No content in response` from Nano Banana | Happens when the prompt trips a safety filter. Remove brand/product names from the prompt, avoid referring to real people, and retry |
+| Bot browser won't close | Run any script — on startup it kills any zombie bot Chrome process. Does not touch your main Chrome |
+| Session expired | Run `setup.js` again |
 
-## Safety
+---
 
-This approach uses your real browser session, which is the safest method:
-- No login endpoint calls (no checkpoint triggers)
-- No cookie-based API calls (no pattern detection)
-- Instagram sees literally your Chrome doing what you'd do manually
-- Still: stay under 3-5 posts/day, don't automate likes/follows/comments on others' content
+## Files layout
+
+```
+instagram-autoposter/
+├── SKILL.md                     (this file)
+├── README.md                    (GitHub homepage)
+├── package.json
+├── .env                         (YOUR API key — gitignored)
+├── .gitignore
+├── scripts/
+│   ├── setup.js
+│   ├── save-inspiration.js
+│   ├── analyze-inspiration.js
+│   ├── generate-carousel.js
+│   ├── slides-to-reel.js
+│   ├── post.js
+│   ├── analytics.js
+│   └── lib/
+│       └── browser.js           (cross-platform Playwright launcher)
+├── inspirations/                (gitignored — your swipe file)
+│   ├── index.json
+│   └── <post-code>/
+│       ├── slide-01.jpg ...
+└── generated/                   (gitignored — your output)
+    └── <name>/
+        ├── slide-01.png ...
+        ├── manifest.json
+        └── <name>.mp4           (if you ran slides-to-reel)
+```
+
+---
+
+## License
+
+MIT. Use it, fork it, improve it, ship with it.
