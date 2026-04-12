@@ -52,7 +52,7 @@ async function generateImage(ai, prompt, referenceImages = [], maxRetries = 2) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3.1-flash-image-preview',
         contents: [{ role: 'user', parts }],
       });
 
