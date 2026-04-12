@@ -1,7 +1,7 @@
 ---
 name: instagram-autoposter
-version: "2.1.0"
-description: "Post reels, videos, and photos to Instagram via Playwright + Chrome CDP. Uses a DEDICATED bot browser profile — your regular Chrome stays open and untouched. Read engagement metrics from your posts. No API keys. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post video, instagram analytics, ig metrics, instagram post."
+version: "3.0.0"
+description: "End-to-end Instagram content engine: save competitor posts as inspiration, analyze them with Gemini Vision, generate carousel images with Nano Banana (gemini-2.5-flash-image), and publish as carousels/reels/photos via Playwright browser automation. Read engagement metrics. Dedicated bot profile keeps your main Chrome free. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post carousel, instagram analytics, generate carousel, nano banana, inspiration, ig content."
 argument-hint: 'instagram-autoposter --reel video.mp4 "caption"'
 allowed-tools: Bash, Read, Write
 user-invocable: true
@@ -72,6 +72,75 @@ node ~/.claude/skills/instagram-autoposter/scripts/post.js --photo image.jpg "ca
 
 ```bash
 node ~/.claude/skills/instagram-autoposter/scripts/post.js --video video.mp4 "caption"
+```
+
+### Post a carousel
+
+```bash
+node ~/.claude/skills/instagram-autoposter/scripts/post.js --carousel "caption with #hashtags" slide-01.jpg slide-02.jpg slide-03.jpg
+```
+
+Carousel must have at least 2 images (max 10). Order is preserved.
+
+## 3. Inspiration-driven content workflow
+
+### Step 1 — Save an Instagram post/reel you want to learn from
+
+```bash
+node ~/.claude/skills/instagram-autoposter/scripts/save-inspiration.js https://instagram.com/p/ABC123 "loved the hook on slide 1"
+node ~/.claude/skills/instagram-autoposter/scripts/save-inspiration.js --list
+node ~/.claude/skills/instagram-autoposter/scripts/save-inspiration.js --remove ABC123
+```
+
+Saves to `inspirations/index.json`.
+
+### Step 2 — Download + analyze with Gemini Vision
+
+```bash
+node ~/.claude/skills/instagram-autoposter/scripts/analyze-inspiration.js ABC123
+# or analyze all new ones:
+node ~/.claude/skills/instagram-autoposter/scripts/analyze-inspiration.js --all
+```
+
+Downloads all slides to `inspirations/ABC123/` and runs Gemini Vision on them. Analysis includes:
+- Hook, structure, visual style, text overlay patterns
+- Content type, target emotion, why it works
+- **Adaptation brief**: concrete content idea for WealthMaia
+
+### Step 3 — Generate your carousel with Nano Banana
+
+```bash
+# Based on an analyzed inspiration (5 slides, uses its visual style as reference)
+node ~/.claude/skills/instagram-autoposter/scripts/generate-carousel.js --from ABC123 --name my-first-carousel
+
+# From a custom prompts file (one prompt per line = one slide)
+node ~/.claude/skills/instagram-autoposter/scripts/generate-carousel.js --prompts prompts.txt --name custom
+
+# Quick single-image test
+node ~/.claude/skills/instagram-autoposter/scripts/generate-carousel.js --prompt "A minimalist slide..." --name test
+```
+
+Outputs to `generated/<name>/slide-NN.png` and writes a `manifest.json` with the exact post command.
+
+Uses **gemini-2.5-flash-image** (Nano Banana). Requires `GOOGLE_API_KEY` in `.env` (get one free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+
+### Step 4 — Post the generated carousel
+
+```bash
+node ~/.claude/skills/instagram-autoposter/scripts/post.js --carousel "Your caption here" generated/my-first-carousel/slide-01.png generated/my-first-carousel/slide-02.png ...
+```
+
+### Full workflow example
+
+```
+1. save-inspiration.js https://instagram.com/p/XYZ
+2. analyze-inspiration.js XYZ           -> analysis stored
+3. (review the adaptation_brief in inspirations/index.json)
+4. generate-carousel.js --from XYZ --name wealthmaia-post-1
+5. (review generated/wealthmaia-post-1/*.png, regenerate any slide if needed)
+6. post.js --carousel "caption" generated/wealthmaia-post-1/slide-*.png
+7. (24-48h later) analytics.js --top 10 to see what worked
+8. Repeat, leaning into winning patterns
 ```
 
 ### Use Brave instead of Chrome

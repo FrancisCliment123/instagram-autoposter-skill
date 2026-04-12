@@ -7,6 +7,7 @@
  *   node post.js --photo <file.jpg> "caption"
  *   node post.js --reel <file.mp4> "caption"
  *   node post.js --video <file.mp4> "caption"
+ *   node post.js --carousel "caption" file1.jpg file2.jpg file3.jpg ...
  *
  * Requires:
  *   - Chrome or Brave installed and logged into Instagram
@@ -18,7 +19,8 @@ const path = require('path');
 const fs = require('fs');
 const { launchAndConnect, sleep, humanDelay } = require('./lib/browser');
 
-async function uploadPost({ page, filePath, caption, isReel }) {
+async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarousel }) {
+  const files = isCarousel ? filePaths : [filePath];
   console.error('[post] Opening Instagram...');
   await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 });
   await humanDelay(3000, 5000);
@@ -65,11 +67,21 @@ async function uploadPost({ page, filePath, caption, isReel }) {
     // Sometimes the upload dialog opens directly
   }
 
-  // Upload the file
-  console.error(`[post] Uploading: ${filePath}`);
+  // Upload the file(s) — Instagram accepts multi-file input for carousels
+  console.error(`[post] Uploading ${files.length} file(s): ${files.map(f => path.basename(f)).join(', ')}`);
   const fileInput = await page.waitForSelector('input[type="file"]', { state: 'attached', timeout: 15000 });
-  await fileInput.setInputFiles(filePath);
+  await fileInput.setInputFiles(files);
   await humanDelay(3000, 5000);
+
+  // For carousel, we may need to add more files via "+" button if single-select
+  // (Instagram usually accepts all at once, but fallback handled below)
+  if (isCarousel && files.length > 1) {
+    // Sometimes need to click a "Select multiple" toggle; handled if present
+    try {
+      await page.click('svg[aria-label*="Select multiple" i], svg[aria-label*="Seleccionar varios" i]', { timeout: 2000 });
+      await humanDelay(1000, 1500);
+    } catch {}
+  }
 
   // Click Next (may need 2-3 times: crop -> filter -> caption)
   for (let i = 0; i < 3; i++) {
@@ -119,6 +131,7 @@ async function main() {
 
   let mode = null;
   let filePath = null;
+  let carouselFiles = [];
   let caption = '';
   let browserName = 'chrome';
 
@@ -126,22 +139,46 @@ async function main() {
     if (args[i] === '--photo' && args[i + 1]) { mode = 'photo'; filePath = args[i + 1]; i++; }
     else if (args[i] === '--reel' && args[i + 1]) { mode = 'reel'; filePath = args[i + 1]; i++; }
     else if (args[i] === '--video' && args[i + 1]) { mode = 'video'; filePath = args[i + 1]; i++; }
+    else if (args[i] === '--carousel') { mode = 'carousel'; }
     else if (args[i] === '--browser' && args[i + 1]) { browserName = args[i + 1]; i++; }
+    else if (mode === 'carousel' && !caption) { caption = args[i]; }
+    else if (mode === 'carousel') { carouselFiles.push(args[i]); }
     else if (!caption) { caption = args[i]; }
   }
 
-  if (!mode || !filePath) {
-    console.error('Missing --photo, --reel, or --video with file path.');
+  if (!mode) {
+    console.error('Missing --photo, --reel, --video, or --carousel.');
     process.exit(1);
   }
 
-  const absPath = path.resolve(filePath);
-  if (!fs.existsSync(absPath)) {
-    console.error(`File not found: ${absPath}`);
-    process.exit(1);
+  let absPath = null;
+  let absFiles = [];
+
+  if (mode === 'carousel') {
+    if (carouselFiles.length < 2) {
+      console.error('Carousel needs at least 2 files. Got:', carouselFiles.length);
+      process.exit(1);
+    }
+    absFiles = carouselFiles.map(f => path.resolve(f));
+    for (const f of absFiles) {
+      if (!fs.existsSync(f)) {
+        console.error(`File not found: ${f}`);
+        process.exit(1);
+      }
+    }
+  } else {
+    if (!filePath) {
+      console.error(`${mode} requires a file path.`);
+      process.exit(1);
+    }
+    absPath = path.resolve(filePath);
+    if (!fs.existsSync(absPath)) {
+      console.error(`File not found: ${absPath}`);
+      process.exit(1);
+    }
   }
 
-  console.error(`[post] mode=${mode} file=${absPath} caption="${caption.slice(0, 60)}..."`);
+  console.error(`[post] mode=${mode} ${mode === 'carousel' ? `files=${absFiles.length}` : `file=${absPath}`} caption="${caption.slice(0, 60)}..."`);
 
   let cleanup;
   try {
@@ -151,15 +188,17 @@ async function main() {
     await uploadPost({
       page: session.page,
       filePath: absPath,
+      filePaths: absFiles,
       caption,
       isReel: mode === 'reel',
+      isCarousel: mode === 'carousel',
     });
 
     console.log('');
     console.log(JSON.stringify({
       success: true,
       type: mode,
-      file: absPath,
+      files: mode === 'carousel' ? absFiles : [absPath],
       caption: caption.slice(0, 200),
       timestamp: new Date().toISOString(),
     }, null, 2));
