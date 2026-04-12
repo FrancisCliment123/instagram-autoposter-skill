@@ -34,7 +34,7 @@ function getClient() {
   return new GoogleGenAI({ apiKey });
 }
 
-async function generateImage(ai, prompt, referenceImages = []) {
+async function generateImage(ai, prompt, referenceImages = [], maxRetries = 2) {
   const parts = [{ text: prompt }];
 
   // Add reference images (for visual style transfer)
@@ -48,25 +48,46 @@ async function generateImage(ai, prompt, referenceImages = []) {
     });
   }
 
-  const result = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: [{ role: 'user', parts }],
-  });
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: [{ role: 'user', parts }],
+      });
 
-  // Extract image from response
-  const response = result.candidates?.[0]?.content?.parts;
-  if (!response) throw new Error('No content in response');
+      // Check for safety/quality blocks explicitly
+      const candidate = result.candidates?.[0];
+      if (!candidate) {
+        const block = result.promptFeedback?.blockReason;
+        throw new Error(block ? `Blocked: ${block}` : 'No candidate in response');
+      }
+      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+        throw new Error(`Finish reason: ${candidate.finishReason}`);
+      }
 
-  for (const part of response) {
-    if (part.inlineData?.data) {
-      return {
-        buffer: Buffer.from(part.inlineData.data, 'base64'),
-        mimeType: part.inlineData.mimeType,
-      };
+      const responseParts = candidate.content?.parts;
+      if (!responseParts) throw new Error('No content parts in response');
+
+      for (const part of responseParts) {
+        if (part.inlineData?.data) {
+          return {
+            buffer: Buffer.from(part.inlineData.data, 'base64'),
+            mimeType: part.inlineData.mimeType,
+          };
+        }
+      }
+
+      throw new Error('Response had no image data');
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries) {
+        console.error(`  retry ${attempt + 1}/${maxRetries} after: ${err.message}`);
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      }
     }
   }
-
-  throw new Error('No image in response');
+  throw lastErr;
 }
 
 async function main() {
@@ -112,47 +133,27 @@ async function main() {
       process.exit(1);
     }
 
-    // Build prompts from the adaptation brief and visual style
-    const visualStyle = typeof entry.analysis.visual_style === 'string'
-      ? entry.analysis.visual_style
-      : JSON.stringify(entry.analysis.visual_style);
-    const brief = typeof entry.analysis.adaptation_brief === 'string'
-      ? entry.analysis.adaptation_brief
-      : JSON.stringify(entry.analysis.adaptation_brief);
-
     console.error('[generate] Loaded inspiration analysis');
-    console.error('[generate] Adaptation brief:', brief);
 
-    // Default: 5 slides matching structure
-    const structure = typeof entry.analysis.structure === 'string'
-      ? entry.analysis.structure
-      : JSON.stringify(entry.analysis.structure);
+    // Build a CONCISE shared style spec (keep it short — long prompts hurt Nano Banana)
+    const style = `STYLE: Minimalist Instagram carousel slide, 1080x1350 vertical (4:5 aspect). Clean off-white background with subtle faint grid pattern (like notebook paper). Typography blend: elegant serif for large centered headlines, modern sans-serif for body text. Color palette: soft navy blue and sage green accents on neutral cream/white base. Aspirational but minimal. Small "WealthMaia" wordmark in top-right corner. No photos of real people. No logos of real brands. Digital illustration style only.`;
 
-    const basePrompt = `Create a single Instagram carousel slide (1080x1350 vertical).
-
-Visual style to match: ${visualStyle}
-
-WealthMaia context (a wealth management AI SaaS): ${brief}
-
-Structure to follow: ${structure}`;
-
+    // Custom adaptation — WealthMaia-specific, no ambiguity
     prompts = [
-      basePrompt + '\n\nThis is SLIDE 1 (HOOK): The scroll-stopping opening with a bold, large headline that creates curiosity.',
-      basePrompt + '\n\nThis is SLIDE 2: State the problem WealthMaia solves. Large text, clean layout.',
-      basePrompt + '\n\nThis is SLIDE 3: Show the WealthMaia solution with a concrete benefit. Include icon/illustration.',
-      basePrompt + '\n\nThis is SLIDE 4: Social proof or specific result (use plausible placeholder stats).',
-      basePrompt + '\n\nThis is SLIDE 5: CTA slide — "Join WealthMaia" with clear call to action.',
+      `${style}\n\nSLIDE 1 (HOOK/COVER): Large centered headline in elegant serif: "5 Unsexy AI Habits That Quietly Grow Wealth". Below the headline, a small sans-serif subtitle: "No hype. Just compounding.". A tiny abstract illustration of an upward-trending line graph in the bottom third. Clean, aspirational, minimal.`,
+
+      `${style}\n\nSLIDE 2 ("notes app" style list): Top of slide has a small serif number "01" and title "Automate Round-Ups". Inside a rounded white card in the center, 3 bullet points in clean sans-serif:\n• Every purchase rounds to the nearest euro\n• Spare change invested automatically\n• Compounds silently while you live\nAt bottom: small tag "Powered by WealthMaia".`,
+
+      `${style}\n\nSLIDE 3 ("notes app" style list): Top serif number "02" and title "Predict Bills Before They Hit". Rounded white card with 3 bullets:\n• AI scans your recurring payments\n• Forecasts next 30 days of cash flow\n• Alerts you before a crunch\nBottom tag: "Powered by WealthMaia".`,
+
+      `${style}\n\nSLIDE 4 ("notes app" style list): Top serif number "03" and title "Cancel What You Forgot". Rounded white card with 3 bullets:\n• Finds silent subscriptions you stopped using\n• One tap to cancel\n• Average user saves 34€/month\nBottom tag: "Powered by WealthMaia".`,
+
+      `${style}\n\nSLIDE 5 (CTA): Large centered serif headline: "Start growing quietly." Below it a sans-serif line: "Join the WealthMaia waitlist". Center of the slide: a clean rectangular button illustration with the text "wealthmaia.com" inside. Minimal, inviting, no hype.`,
     ];
 
-    // Use first 2 reference images from the inspiration for visual style
-    if (entry.downloaded_path && fs.existsSync(entry.downloaded_path)) {
-      const refs = fs.readdirSync(entry.downloaded_path)
-        .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f))
-        .slice(0, 2)
-        .map(f => path.join(entry.downloaded_path, f));
-      referenceImages = refs;
-      console.error(`[generate] Using ${refs.length} reference images from inspiration`);
-    }
+    // Skip reference images — they often contain elements (brand names, faces,
+    // copyrighted imagery) that trigger Gemini's safety filters.
+    referenceImages = [];
   } else {
     console.error('Provide one of: --prompts <file>, --prompt "...", --from <code>');
     process.exit(1);

@@ -55,8 +55,13 @@ async function scrapePost(page, entry) {
 
   // Get caption + basic info via DOM
   const basic = await page.evaluate(() => {
-    const captionEl = document.querySelector('div[role="button"] h1, article h1, meta[property="og:description"]');
-    const caption = captionEl?.textContent || captionEl?.content || '';
+    // Try h1 first (real caption), fall back to meta description
+    const h1 = document.querySelector('article h1, div[role="button"] h1');
+    let caption = h1?.textContent || '';
+    if (!caption) {
+      const meta = document.querySelector('meta[property="og:description"]');
+      caption = meta?.content || '';
+    }
     const timeEl = document.querySelector('time');
     const datetime = timeEl?.getAttribute('datetime') || null;
     return { caption, datetime };
@@ -68,13 +73,36 @@ async function scrapePost(page, entry) {
   const imageUrls = [];
   const videoUrls = [];
 
-  // Try to get them from the DOM
+  // Try to get them from the DOM - use broader selectors since Instagram rotates layout
   const collectMedia = async () => {
     const mediaData = await page.evaluate(() => {
-      const imgs = Array.from(document.querySelectorAll('article img'))
-        .map(i => ({ src: i.src, srcset: i.srcset, alt: i.alt }))
-        .filter(i => i.src && i.src.includes('cdninstagram') && !i.src.includes('profile'));
-      const vids = Array.from(document.querySelectorAll('article video'))
+      // Collect from all <img> and srcset on the page (not just article)
+      const imgElements = Array.from(document.querySelectorAll('img'));
+      const imgs = [];
+      for (const i of imgElements) {
+        const src = i.src || '';
+        const srcset = i.srcset || '';
+        // Instagram media CDN images (fbcdn.net / cdninstagram) but not profile/avatar
+        const isMedia = (src.includes('cdninstagram') || src.includes('fbcdn.net'))
+          && !src.includes('profile')
+          && !src.includes('s150x150')
+          && !src.includes('s320x320');
+        if (isMedia) {
+          // Pick the highest-resolution from srcset if available
+          let bestSrc = src;
+          if (srcset) {
+            const candidates = srcset.split(',').map(s => s.trim().split(/\s+/));
+            const largest = candidates.sort((a, b) => {
+              const wa = parseInt((a[1] || '0').replace(/\D/g, '')) || 0;
+              const wb = parseInt((b[1] || '0').replace(/\D/g, '')) || 0;
+              return wb - wa;
+            })[0];
+            if (largest) bestSrc = largest[0];
+          }
+          imgs.push({ src: bestSrc, alt: i.alt || '' });
+        }
+      }
+      const vids = Array.from(document.querySelectorAll('video'))
         .map(v => ({ src: v.src, poster: v.poster }))
         .filter(v => v.src);
       return { imgs, vids };
@@ -91,9 +119,26 @@ async function scrapePost(page, entry) {
 
   // Click "Next" to load the rest of the carousel
   for (let i = 0; i < 15; i++) {
-    const nextBtn = await page.$('button[aria-label*="Next" i], button[aria-label*="Siguiente" i]');
-    if (!nextBtn) break;
-    await nextBtn.click().catch(() => {});
+    // Try multiple selectors — Instagram's aria-labels vary
+    const nextSelectors = [
+      'button[aria-label*="Next" i]',
+      'button[aria-label*="Siguiente" i]',
+      'button._afxw',            // carousel next button class (often stable)
+      'div[role="button"]:has(svg[aria-label*="Next" i])',
+      'div[role="button"]:has(svg[aria-label*="Siguiente" i])',
+    ];
+    let clicked = false;
+    for (const sel of nextSelectors) {
+      try {
+        const btn = await page.$(sel);
+        if (btn) {
+          await btn.click();
+          clicked = true;
+          break;
+        }
+      } catch {}
+    }
+    if (!clicked) break;
     await sleep(1500);
     await collectMedia();
   }
