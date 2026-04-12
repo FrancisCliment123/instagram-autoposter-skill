@@ -1,6 +1,6 @@
 ---
 name: instagram-autoposter
-version: "3.2.0"
+version: "3.3.0"
 description: "End-to-end Instagram content engine for founders and marketers. Save competitor posts as inspiration, analyze them with Gemini Vision, generate on-brand carousel slides with Nano Banana 2, convert slides to Reels video, and publish carousels/reels/photos through a dedicated browser bot (your regular Chrome stays open). Read engagement metrics and iterate. No Facebook app review needed. Works on Windows, macOS, and Linux. TRIGGER: instagram, post reel, post carousel, generate carousel, nano banana, ig inspiration, ig analytics, slides to reel."
 argument-hint: 'instagram-autoposter analyze <instagram_url>'
 allowed-tools: Bash, Read, Write
@@ -51,7 +51,8 @@ Everything runs locally. Uses your own Chrome (not your API keys) for Instagram 
 | `analyze-inspiration.js` | Download slides + run Gemini Vision to extract hook, style, structure, and an adaptation brief for your brand |
 | `generate-carousel.js` | Generate a new carousel with Nano Banana 2 (Gemini 3.1 Flash Image) using the inspiration's style as guidance |
 | `slides-to-reel.js` | Convert carousel slides into a 9:16 MP4 for Reels |
-| `post.js` | Publish a photo, video, reel, or carousel through the bot browser |
+| `post.js` | Publish a photo, video, reel, or carousel through the bot browser (no music — web limitation) |
+| `stage-carousel.js` | Prepare a carousel for **mobile publishing with trending music** (web can't add music) — drops everything into a cloud-synced folder so you can finish from your phone in ~60 seconds |
 | `analytics.js` | Read your own posts' metrics (likes, comments, views) and compute a weighted engagement score |
 
 ---
@@ -169,6 +170,52 @@ Photo or feed video:
 ```bash
 node scripts/post.js --photo image.jpg "caption"
 node scripts/post.js --video clip.mp4 "caption"
+```
+
+> **Why no music?** Instagram's web interface doesn't expose its music library — only the mobile app does. For music-enabled posts, use the `stage-carousel.js` flow below.
+
+### 5b. Publish with trending music (recommended for hero posts)
+
+Carousels with trending music get pushed into the Reels tab and typically reach 3–10× more accounts than silent posts. Instagram only lets you add music from the mobile app, so this script stages everything for a fast mobile publish:
+
+```bash
+node scripts/stage-carousel.js --from my-first-post --caption "Your caption here"
+```
+
+Output goes to `~/.instagram-bot-staged/my-first-post/` (override with `--out <path>` or `STAGE_DIR` env var):
+
+```
+<stage-dir>/my-first-post/
+  slide-01.png, slide-02.png, ...
+  reel.mp4                    (if you ran slides-to-reel.js)
+  caption.txt                 (ready to copy)
+  INSTRUCTIONS.md             (step-by-step for mobile)
+```
+
+**Configure your phone sync once** — pick any one of these:
+
+| Service | How to set it up |
+|---|---|
+| **iCloud Drive** (iPhone + Mac) | Set `STAGE_DIR=~/Library/Mobile\ Documents/com~apple~CloudDocs/instagram-bot-staged` in `.env`. Folder appears in Files app on iPhone |
+| **Google Drive** (any phone) | Install Google Drive Desktop, set `STAGE_DIR=<G:\>\\My\ Drive\\instagram-bot-staged` (Windows) or `~/Google\ Drive/instagram-bot-staged` (Mac). On phone: Google Drive app |
+| **Dropbox** | Install Dropbox desktop, set `STAGE_DIR=~/Dropbox/instagram-bot-staged`. On phone: Dropbox app |
+| **OneDrive** | Similar to above |
+
+**Then on your phone** (~60 seconds):
+1. Open the synced folder → save all `slide-*.png` to your photos
+2. Instagram → `+` → Post → select slides in order
+3. Next → Next → tap **Add music** → pick a trending sound
+4. Paste caption from `caption.txt` → Share
+
+After publishing, clean up:
+```bash
+node scripts/stage-carousel.js --clean my-first-post
+```
+
+Other commands:
+```bash
+node scripts/stage-carousel.js --list              # see what's currently staged
+node scripts/stage-carousel.js --caption-file file.txt --from my-post   # read caption from file
 ```
 
 ### 6. Measure after 24-48h

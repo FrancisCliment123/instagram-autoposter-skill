@@ -19,7 +19,7 @@ const path = require('path');
 const fs = require('fs');
 const { launchAndConnect, sleep, humanDelay } = require('./lib/browser');
 
-async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarousel }) {
+async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarousel, keepOpen }) {
   const files = isCarousel ? filePaths : [filePath];
   console.error('[post] Opening Instagram...');
   await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -290,6 +290,7 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
   });
 
   await humanDelay(2000, 3000);
+  return { mode: 'published', success: true };
 }
 
 async function main() {
@@ -308,6 +309,7 @@ async function main() {
   let carouselFiles = [];
   let caption = '';
   let browserName = 'chrome';
+  let keepOpen = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--photo' && args[i + 1]) { mode = 'photo'; filePath = args[i + 1]; i++; }
@@ -315,6 +317,7 @@ async function main() {
     else if (args[i] === '--video' && args[i + 1]) { mode = 'video'; filePath = args[i + 1]; i++; }
     else if (args[i] === '--carousel') { mode = 'carousel'; }
     else if (args[i] === '--browser' && args[i + 1]) { browserName = args[i + 1]; i++; }
+    else if (args[i] === '--keep-open') { keepOpen = true; }
     else if (mode === 'carousel' && !caption) { caption = args[i]; }
     else if (mode === 'carousel') { carouselFiles.push(args[i]); }
     else if (!caption) { caption = args[i]; }
@@ -366,6 +369,7 @@ async function main() {
       caption,
       isReel: mode === 'reel',
       isCarousel: mode === 'carousel',
+      keepOpen,
     });
 
     console.log('');
@@ -380,7 +384,8 @@ async function main() {
     console.error('Error:', err.message);
     process.exit(1);
   } finally {
-    if (cleanup) await cleanup();
+    if (cleanup && !keepOpen) await cleanup();
+    if (keepOpen) console.error('[post] --keep-open set; browser left running. Close it manually when done.');
   }
 }
 
