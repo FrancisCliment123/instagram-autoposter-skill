@@ -32,44 +32,162 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
   }
 
   console.error('[post] Clicking "Create" button...');
-  // Try several selectors — Instagram rotates them
+  // Try several selectors — Instagram rotates them. We click the nav icon.
   const createSelectors = [
+    // SVG icons (most reliable since aria-labels are more stable than class names)
     'svg[aria-label="New post"]',
     'svg[aria-label="Nueva publicacion"]',
+    'svg[aria-label="Nueva publicación"]',
     'svg[aria-label="Crear"]',
     'svg[aria-label="Create"]',
-    'a[href="#"][role="link"]:has(svg[aria-label*="ew post" i])',
+    // Climb to the clickable ancestor
+    'a[role="link"]:has(svg[aria-label*="Create" i])',
+    'a[role="link"]:has(svg[aria-label*="Crear" i])',
+    'div[role="button"]:has(svg[aria-label*="Create" i])',
+    'div[role="button"]:has(svg[aria-label*="Crear" i])',
   ];
 
   let clicked = false;
   for (const sel of createSelectors) {
-    const el = await page.$(sel);
-    if (el) {
-      await el.click();
-      clicked = true;
-      break;
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        // Click the nearest clickable ancestor (svg itself isn't clickable reliably)
+        const clickTarget = await el.evaluateHandle((node) => {
+          let current = node;
+          while (current && current.tagName !== 'A' && current.getAttribute('role') !== 'button') {
+            current = current.parentElement;
+            if (!current) break;
+          }
+          return current || node;
+        });
+        await clickTarget.asElement()?.click();
+        console.error(`[post] Clicked via selector: ${sel}`);
+        clicked = true;
+        break;
+      }
+    } catch (e) {
+      // try next selector
     }
   }
 
   if (!clicked) {
-    // Fallback — find it by text
-    await page.click('text=/create|crear/i', { timeout: 5000 }).catch(() => {});
+    console.error('[post] Create button not found. Trying /create/select/ direct URL...');
+    try {
+      await page.goto('https://www.instagram.com/create/select/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await humanDelay(2000, 3000);
+      clicked = true;
+    } catch (e) {
+      throw new Error('Could not reach Instagram create page. Check your session.');
+    }
   }
 
   await humanDelay(1500, 2500);
 
-  // If there's a dropdown (Post / Reel / Story / Live), click "Post" or "Reel"
-  const menuTarget = isReel ? /reel/i : /post|publicacion/i;
-  try {
-    await page.click(`text=${menuTarget.source}`, { timeout: 3000 });
-    await humanDelay(1000, 2000);
-  } catch {
-    // Sometimes the upload dialog opens directly
+  // If a "Post / Reel / Story / Live" submenu appears, click the right one.
+  // Instagram Spanish UI uses "Publicación" (with tilde) for Post.
+  const targetsEn = isReel ? ['Reel'] : ['Post'];
+  const targetsEs = isReel ? ['Reel'] : ['Publicación', 'Publicacion'];
+  const allTargets = [...targetsEn, ...targetsEs];
+
+  let submenuClicked = false;
+  for (const label of allTargets) {
+    // Try exact text match on any clickable element
+    const tryClicks = [
+      // Spans with exact text, then click nearest parent button
+      async () => {
+        const span = await page.evaluateHandle((t) => {
+          const all = Array.from(document.querySelectorAll('span, div'));
+          return all.find(el => el.textContent?.trim() === t && el.offsetParent !== null);
+        }, label);
+        const el = span?.asElement();
+        if (el) {
+          await el.evaluate((node) => {
+            let n = node;
+            while (n && !(n.tagName === 'BUTTON' || n.getAttribute('role') === 'button' || n.getAttribute('role') === 'menuitem')) {
+              n = n.parentElement;
+            }
+            (n || node).click();
+          });
+          return true;
+        }
+        return false;
+      },
+      async () => {
+        const btn = await page.$(`text="${label}"`);
+        if (btn) { await btn.click(); return true; }
+        return false;
+      },
+    ];
+    for (const fn of tryClicks) {
+      try {
+        if (await fn()) {
+          console.error(`[post] Clicked submenu item: "${label}"`);
+          submenuClicked = true;
+          await humanDelay(1500, 2500);
+          break;
+        }
+      } catch {}
+    }
+    if (submenuClicked) break;
   }
 
   // Upload the file(s) — Instagram accepts multi-file input for carousels
   console.error(`[post] Uploading ${files.length} file(s): ${files.map(f => path.basename(f)).join(', ')}`);
-  const fileInput = await page.waitForSelector('input[type="file"]', { state: 'attached', timeout: 15000 });
+
+  // Take a debug screenshot so we can see what IG is showing us
+  const debugShot = path.join(path.dirname(files[0]), `debug-${Date.now()}.png`);
+  await page.screenshot({ path: debugShot, fullPage: false }).catch(() => {});
+  console.error(`[post] Debug screenshot saved: ${debugShot}`);
+
+  // Dump visible buttons to help diagnose
+  const visibleButtons = await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button, div[role="button"], a[role="link"]'))
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.top < window.innerHeight;
+      })
+      .map(el => (el.innerText || el.getAttribute('aria-label') || '').trim())
+      .filter(t => t && t.length < 100);
+    return [...new Set(buttons)].slice(0, 30);
+  });
+  console.error(`[post] Visible buttons/links: ${JSON.stringify(visibleButtons)}`);
+
+  // Sometimes the file input is inside a dialog/modal and is only attached when we click "Select from computer"
+  let fileInput = null;
+  try {
+    fileInput = await page.waitForSelector('input[type="file"]', { state: 'attached', timeout: 8000 });
+  } catch {
+    // Try clicking a "Select from computer" button first, then retry
+    const selectBtnSelectors = [
+      'button:has-text("Select from computer")',
+      'button:has-text("Seleccionar del ordenador")',
+      'button:has-text("Seleccionar del equipo")',
+      'button:has-text("Seleccionar desde el ordenador")',
+      'button:has-text("Select From Device")',
+      'button:has-text("Subir")',
+      'button:has-text("Upload")',
+      // fallback: find button with text matching any likely word
+      'button >> text=/select|seleccionar|upload|subir/i',
+    ];
+    for (const sel of selectBtnSelectors) {
+      try {
+        const btn = await page.$(sel);
+        if (btn) {
+          console.error(`[post] Clicking "${sel}" to reveal file input...`);
+          await btn.click();
+          await humanDelay(500, 1000);
+          break;
+        }
+      } catch {}
+    }
+    try {
+      fileInput = await page.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
+    } catch {
+      throw new Error(`File input not found. Debug screenshot: ${debugShot}. Buttons visible: ${JSON.stringify(visibleButtons)}`);
+    }
+  }
+
   await fileInput.setInputFiles(files);
   await humanDelay(3000, 5000);
 
@@ -86,9 +204,25 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
   // Click Next (may need 2-3 times: crop -> filter -> caption)
   for (let i = 0; i < 3; i++) {
     try {
-      const nextBtn = await page.waitForSelector('button:has-text("Next"), button:has-text("Siguiente")', { timeout: 5000 });
-      await nextBtn.click();
-      await humanDelay(1500, 2500);
+      // Find "Next" or "Siguiente" via text match (button may be a div[role=button])
+      const clicked = await page.evaluate(() => {
+        const targets = ['Next', 'Siguiente'];
+        const all = Array.from(document.querySelectorAll('button, div[role="button"]'));
+        for (const el of all) {
+          const text = (el.innerText || '').trim();
+          if (targets.includes(text) && el.offsetParent !== null) {
+            el.click();
+            return text;
+          }
+        }
+        return null;
+      });
+      if (clicked) {
+        console.error(`[post] Clicked "${clicked}" (step ${i + 1})`);
+        await humanDelay(1500, 2500);
+      } else {
+        break;
+      }
     } catch {
       break;
     }
@@ -97,21 +231,61 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
   // Add caption
   if (caption) {
     console.error('[post] Adding caption...');
-    const captionArea = await page.waitForSelector('div[aria-label="Write a caption..."], div[aria-label*="caption" i], div[aria-label*="pie de foto" i], textarea[aria-label*="caption" i]', { timeout: 10000 });
-    await captionArea.click();
+    // Instagram uses contenteditable div — aria-label varies: "Write a caption...", "Escribe un pie de foto...", etc.
+    const captionHandle = await page.evaluateHandle(() => {
+      // Look for any contenteditable with an aria-label hinting at "caption"
+      const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
+      for (const el of editables) {
+        const label = (el.getAttribute('aria-label') || '').toLowerCase();
+        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+        if (label.includes('caption') || label.includes('pie') || label.includes('escribe')
+            || placeholder.includes('caption') || placeholder.includes('pie') || placeholder.includes('escribe')) {
+          return el;
+        }
+      }
+      // Fallback: first visible contenteditable in the current dialog
+      return editables.find(el => el.offsetParent !== null) || null;
+    });
+
+    const captionEl = captionHandle?.asElement();
+    if (!captionEl) {
+      throw new Error('Caption field not found.');
+    }
+    await captionEl.click();
     await humanDelay(300, 600);
-    await page.keyboard.type(caption, { delay: 15 });
+    await page.keyboard.type(caption, { delay: 12 });
     await humanDelay(1000, 2000);
   }
 
-  // Click Share
+  // Click Share / Compartir
   console.error('[post] Clicking Share...');
-  const shareBtn = await page.waitForSelector('button:has-text("Share"), button:has-text("Compartir")', { timeout: 10000 });
-  await shareBtn.click();
+  const shareClicked = await page.evaluate(() => {
+    const targets = ['Share', 'Compartir'];
+    const all = Array.from(document.querySelectorAll('button, div[role="button"]'));
+    for (const el of all) {
+      const text = (el.innerText || '').trim();
+      if (targets.includes(text) && el.offsetParent !== null) {
+        el.click();
+        return text;
+      }
+    }
+    return null;
+  });
+  if (!shareClicked) {
+    throw new Error('Share/Compartir button not found.');
+  }
+  console.error(`[post] Clicked "${shareClicked}"`);
 
-  // Wait for upload to complete (Instagram shows "Your post has been shared")
+  // Wait for upload to complete
   console.error('[post] Waiting for confirmation...');
-  await page.waitForSelector('text=/post has been shared|tu publicacion se ha compartido|se compartio/i', { timeout: 120000 }).catch(() => {
+  await page.waitForFunction(() => {
+    const text = document.body.innerText.toLowerCase();
+    return text.includes('post has been shared')
+      || text.includes('se ha compartido')
+      || text.includes('publicación se ha compartido')
+      || text.includes('se compartió')
+      || text.includes('tu publicación');
+  }, { timeout: 180000 }).catch(() => {
     console.error('[post] (Timeout on confirmation text, but upload may still have succeeded)');
   });
 
