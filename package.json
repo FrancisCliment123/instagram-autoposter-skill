@@ -6,6 +6,7 @@
   "scripts": {
     "gui": "node scripts/gui.js",
     "setup": "node scripts/setup.js",
+    "quick-analyze": "node scripts/quick-analyze.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

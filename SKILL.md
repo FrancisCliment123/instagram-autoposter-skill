@@ -65,6 +65,7 @@ The CLI scripts below still work — the GUI is just a friendly wrapper.
 | Script | Purpose |
 |---|---|
 | `setup.js` | One-time login into a dedicated bot Chrome profile |
+| `quick-analyze.js` | **Fastest path**: pass any IG URL, get per-slide breakdown + adaptation brief in one step — no prior save needed |
 | `save-inspiration.js` | Save a public IG post URL you want to learn from |
 | `analyze-inspiration.js` | Download slides + run Gemini Vision to extract hook, style, structure, and an adaptation brief for your brand |
 | `generate-carousel.js` | Generate a new carousel with Nano Banana 2 (Gemini 3.1 Flash Image) using the inspiration's style as guidance |
