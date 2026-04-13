@@ -29,9 +29,31 @@ const SCENES = [
   'A conference room at dawn, long mahogany table, one man standing looking at documents, city waking up outside the window, cool blue morning light',
 ];
 
-const PHOTO_STYLE = `Authentic 1980s press photograph. Shot on 35mm Kodak Tri-X 400 film. Natural film grain, slightly desaturated color, very high contrast between light and dark areas. Chiaroscuro lighting — one dominant warm tungsten or cool fluorescent light source, deep dramatic shadows. Color palette: deep blacks, midnight blue shadows, warm amber/gold highlights. Cinematic, editorial, like a photograph from a 1985 issue of Fortune or BusinessWeek. NOT digital art. NOT illustration. NOT modern photography. Must look like a real archival photograph.`;
+const PHOTO_STYLE = `Authentic archival photograph scanned from a 1985–1988 issue of Fortune, Forbes, or BusinessWeek magazine. Shot on 35mm Kodachrome 64 or Ektachrome 200 slide film by a press photographer.
 
-const TEXT_STYLE = `TEXT OVERLAY — integrated directly onto the dark areas of the photo: Large bold white serif headline (Didot or Times New Roman style), 2-4 words max, centered horizontally in the lower-center zone of the image. Below it: white serif body text, 2-3 lines, smaller size, explaining the concept in plain language. At the very bottom center: small all-caps brand wordmark "WEALTHMAIA" in white, minimal. Text must sit over the darkest part of the image so it's readable. NO colored text boxes or backgrounds behind the text — the dark photo provides the contrast.`;
+MANDATORY film qualities — all must be present:
+• HEAVY visible film grain throughout the entire image, especially in dark areas and midtones — the grain is organic and clumpy, not digital noise
+• Slightly faded, aged color: highlights gently overexposed and creamy-white, shadows with a subtle blue-green or violet cast, midtones warm and desaturated
+• Slight halftone dot pattern as if scanned from a printed magazine page — barely visible but present in flat color areas
+• Imperfect focus softness, especially in corners — no modern tack-sharp digital clarity
+
+Lighting: one dominant light source only — either a tungsten desk lamp (amber/orange cast) or cool blue window light from outside. Deep natural shadows, no fill lights, no even lighting. Chiaroscuro.
+
+Color palette: deep charcoal blacks, midnight blue or indigo shadows, warm amber or burnt orange highlights, slightly yellowed whites.
+
+Photojournalistic framing: slightly imperfect, candid-feeling composition. The subject is unposed or barely posed. Real moment energy.
+
+This is a REAL archival press photograph from 1986. NOT AI-generated art. NOT digital photography. NOT a modern photo with a filter. NOT HDR. NOT clean or sharp. It must look indistinguishable from a physical 35mm scan.`;
+
+const TEXT_STYLE = `TEXT OVERLAY — the text is typeset directly onto the photograph, like a magazine editorial layout. It looks printed, not digitally overlaid:
+
+Headline: large bold white serif (Didot or Times New Roman, very heavy weight), 2–5 words, centered horizontally in the lower third of the image. The headline text has very slight grain/texture matching the film grain of the photo — it reads as ink printed on a photograph.
+
+Body text: white serif, smaller size, 2–4 lines, slightly looser line spacing, centered. Plain and direct language explaining the concept. Same slight grain texture as the headline.
+
+Brand wordmark: small all-caps white sans-serif at the very bottom center. Clean and minimal.
+
+CRITICAL: text must sit over the darkest area of the photo for contrast. NO colored boxes, NO semi-transparent backgrounds, NO drop shadows, NO glows behind the text. The film grain and dark photo provide all the contrast needed. The text looks like it belongs to the photograph, not pasted on top.`;
 
 const FORMAT = `FORMAT: Vertical 4:5 portrait, 1080x1350px. SAFE ZONES: All text and subjects within the central 80% of the frame. Leave at minimum 120px empty margin on all sides. The top 10% and bottom 16% will be covered by Instagram UI — NEVER place text or key elements there.`;
 
