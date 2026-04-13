@@ -265,10 +265,9 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
     console.error(`[post] Crop setting skipped: ${e.message}`);
   }
 
-  // Click Next (may need 2-3 times: crop -> filter -> caption)
-  for (let i = 0; i < 3; i++) {
+  // Click Next (may need up to 4 times: crop -> edit -> filter -> caption)
+  for (let i = 0; i < 4; i++) {
     try {
-      // Find "Next" or "Siguiente" via text match (button may be a div[role=button])
       const clicked = await page.evaluate(() => {
         const targets = ['Next', 'Siguiente'];
         const all = Array.from(document.querySelectorAll('button, div[role="button"]'));
@@ -292,53 +291,63 @@ async function uploadPost({ page, filePath, filePaths, caption, isReel, isCarous
     }
   }
 
-  // Add caption
-  if (caption) {
-    console.error('[post] Adding caption...');
-    // Instagram uses contenteditable div — aria-label varies: "Write a caption...", "Escribe un pie de foto...", etc.
-    const captionHandle = await page.evaluateHandle(() => {
-      // Look for any contenteditable with an aria-label hinting at "caption"
-      const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
-      for (const el of editables) {
-        const label = (el.getAttribute('aria-label') || '').toLowerCase();
-        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
-        if (label.includes('caption') || label.includes('pie') || label.includes('escribe')
-            || placeholder.includes('caption') || placeholder.includes('pie') || placeholder.includes('escribe')) {
-          return el;
-        }
-      }
-      // Fallback: first visible contenteditable in the current dialog
-      return editables.find(el => el.offsetParent !== null) || null;
-    });
-
-    const captionEl = captionHandle?.asElement();
-    if (!captionEl) {
-      throw new Error('Caption field not found.');
-    }
-    await captionEl.click();
-    await humanDelay(300, 600);
-    await page.keyboard.type(caption, { delay: 12 });
-    await humanDelay(1000, 2000);
+  // Wait until the Share/Compartir button is visible — confirms we're on the caption screen
+  console.error('[post] Waiting for caption screen (Share button)...');
+  try {
+    await page.waitForFunction(() => {
+      const targets = ['Share', 'Compartir'];
+      const all = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      return all.some(el => targets.includes((el.innerText || '').trim()) && el.offsetParent !== null);
+    }, { timeout: 15000 });
+    console.error('[post] Caption screen confirmed');
+  } catch {
+    console.error('[post] Share button not detected in time — continuing anyway');
   }
 
-  // Click Share / Compartir
+  // Add caption + Share — kept minimal, no extra page.evaluate between type and Share
+  // (extra calls close the modal before we can click Share)
+  if (caption) {
+    console.error('[post] Adding caption...');
+    await humanDelay(800, 1200);
+
+    // Find caption field by aria-label keyword, fallback to largest visible contenteditable
+    const captionHandle = await page.evaluateHandle(() => {
+      const keywords = ['pie de foto', 'caption', 'escribe', 'write a caption', 'agrega'];
+      const all = Array.from(document.querySelectorAll('[contenteditable="true"], [role="textbox"]'))
+        .filter(el => el.offsetParent !== null);
+      for (const kw of keywords) {
+        const match = all.find(el => (el.getAttribute('aria-label') || '').toLowerCase().includes(kw));
+        if (match) return match;
+      }
+      return all.reduce((best, el) => {
+        const r = el.getBoundingClientRect(), rb = best?.getBoundingClientRect();
+        return !best || r.width * r.height > rb.width * rb.height ? el : best;
+      }, null);
+    });
+    const captionEl = captionHandle?.asElement() ?? null;
+    if (!captionEl) throw new Error('Caption field not found.');
+
+    // Click, type, then Tab to commit React state (blur event saves the caption)
+    await captionEl.click();
+    await humanDelay(500, 700);
+    await page.keyboard.type(caption, { delay: 25 });
+    await page.keyboard.press('Tab');   // triggers blur → React commits the caption value
+    await humanDelay(600, 900);
+    console.error(`[post] Caption typed: "${caption.slice(0, 80)}"`);
+  }
+
+  // Click Share / Compartir — immediately after caption, while modal is still open
   console.error('[post] Clicking Share...');
   const shareClicked = await page.evaluate(() => {
     const targets = ['Share', 'Compartir'];
     const all = Array.from(document.querySelectorAll('button, div[role="button"]'));
     for (const el of all) {
       const text = (el.innerText || '').trim();
-      if (targets.includes(text) && el.offsetParent !== null) {
-        el.click();
-        return text;
-      }
+      if (targets.includes(text) && el.offsetParent !== null) { el.click(); return text; }
     }
     return null;
   });
-  if (!shareClicked) {
-    throw new Error('Share/Compartir button not found.');
-  }
-  console.error(`[post] Clicked "${shareClicked}"`);
+  if (!shareClicked) throw new Error('Share/Compartir button not found.');
 
   // Wait for upload to complete
   console.error('[post] Waiting for confirmation...');
