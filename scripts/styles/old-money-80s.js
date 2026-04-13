@@ -17,33 +17,32 @@
  */
 
 const SCENES = [
-  'A tired financial analyst in a dark 1980s Wall Street office, seen from behind, hunched over papers under a single desk lamp, city skyline glowing blue through the window behind him',
-  'A powerful CEO on the phone at midnight in a dimly lit corner office, amber desk lamp casting deep shadows, New York skyline faintly visible through floor-to-ceiling windows',
-  'A crowded 1980s stock exchange trading floor, traders in suits shouting and waving papers under harsh fluorescent lights, frenetic energy, slightly motion-blurred',
-  'A stern banker in a pin-striped suit reviewing documents in a grand banking hall with ornate columns, low tungsten lighting, empty except for him',
-  'Two executives in power suits walking through the revolving doors of a Wall Street building, shot from inside, backlit by overcast grey daylight',
-  'A man in a 1980s business suit staring out a high-rise window at a rain-soaked Manhattan skyline, back to camera, contemplative, reflections on the glass',
-  'A Wall Street trading room at night, rows of glowing green computer terminals, one trader still at his desk surrounded by printed ticker tape',
-  'A businessman eating alone at a dark restaurant booth, financial newspaper open on the table, one candle, deep shadows',
-  'Interior of a 1980s elevator in a financial tower, a man in a suit looking down at his briefcase, harsh overhead light',
-  'A conference room at dawn, long mahogany table, one man standing looking at documents, city waking up outside the window, cool blue morning light',
+  'A man in a 1980s business suit seen entirely from behind, standing at a floor-to-ceiling window, looking out at the Manhattan skyline, back completely to camera, contemplative posture',
+  'A businessman seen from behind, slumped in a leather chair late at night, one desk lamp on, Wall Street buildings visible through the rain-streaked window, face never visible',
+  'A crowded 1980s stock exchange trading floor shot from above, dozens of suited traders waving papers, no individual face identifiable, frenetic movement slightly blurred',
+  'Close-up of hands — a man in a suit jacket reviewing printed financial documents on a mahogany desk, only hands and papers visible, strong tungsten lamp light from the side',
+  'A lone figure in a pinstripe suit walking away down a long empty marble corridor of a bank, shot from behind, the corridor receding into deep shadow',
+  'A man in a 1980s suit sitting at a cluttered desk, seen from the side at a 90-degree angle, talking on a corded phone, city skyline through the window, face turned away',
+  'Close-up of a hand holding a cigarette over an ashtray on a desk covered in financial reports and a Wall Street Journal, dark restaurant or office setting, deep shadows',
+  'A 1980s trading room at night, rows of glowing green terminal screens, one lone figure seated with his back to the camera, surrounded by ticker tape on the floor',
+  'Two men in power suits seen from behind, shaking hands in front of a tall Wall Street building entrance, backlit by grey overcast daylight',
+  'A man in a suit standing at a window high above the city, hands in pockets, seen from behind at a slight angle, his reflection faintly visible in the glass',
 ];
 
-const PHOTO_STYLE = `Authentic archival photograph scanned from a 1985–1988 issue of Fortune, Forbes, or BusinessWeek magazine. Shot on 35mm Kodachrome 64 or Ektachrome 200 slide film by a press photographer.
+const PHOTO_STYLE = `Authentic press photograph from 1983–1988, either black-and-white or heavily desaturated color. Scanned from a physical copy of Fortune or BusinessWeek magazine.
 
-MANDATORY film qualities — all must be present:
-• HEAVY visible film grain throughout the entire image, especially in dark areas and midtones — the grain is organic and clumpy, not digital noise
-• Slightly faded, aged color: highlights gently overexposed and creamy-white, shadows with a subtle blue-green or violet cast, midtones warm and desaturated
-• Slight halftone dot pattern as if scanned from a printed magazine page — barely visible but present in flat color areas
-• Imperfect focus softness, especially in corners — no modern tack-sharp digital clarity
+MANDATORY — all of these must be clearly visible:
+• EXTREME film grain — the grain is coarse, heavy, and dominant. You can see individual grain clusters in every area of the image. This is NOT subtle. Especially brutal in the dark areas and shadows.
+• The image looks like it was printed on newsprint and then scanned — slight ink bleed, halftone dot texture visible in the midtones
+• BLACK AND WHITE preferred, or if color: deeply desaturated, almost monochrome, with only a faint warm sepia or cool grey-blue tint remaining
+• Highlights are blown out and creamy. Shadows are crushed black with grain visible inside them.
+• Vignette: corners of the image are noticeably darker than the center
+• Imperfect focus: soft edges, slight motion blur in the background, NO modern sharpness anywhere
+• The photograph looks physically aged — slight wear, tonal fading, as if the magazine is decades old
 
-Lighting: one dominant light source only — either a tungsten desk lamp (amber/orange cast) or cool blue window light from outside. Deep natural shadows, no fill lights, no even lighting. Chiaroscuro.
+Lighting: single source only — desk lamp or window. No fill. Deep shadows cover at least 40% of the image.
 
-Color palette: deep charcoal blacks, midnight blue or indigo shadows, warm amber or burnt orange highlights, slightly yellowed whites.
-
-Photojournalistic framing: slightly imperfect, candid-feeling composition. The subject is unposed or barely posed. Real moment energy.
-
-This is a REAL archival press photograph from 1986. NOT AI-generated art. NOT digital photography. NOT a modern photo with a filter. NOT HDR. NOT clean or sharp. It must look indistinguishable from a physical 35mm scan.`;
+This MUST look like a real 1985 newspaper or magazine photograph. The vintage degradation should be OBVIOUS and DOMINANT — not subtle. NOT a modern photo. NOT a clean image with a filter. EXTREME grain and age.`;
 
 const TEXT_STYLE = `TEXT OVERLAY — the text is typeset directly onto the photograph, like a magazine editorial layout. It looks printed, not digitally overlaid:
 
