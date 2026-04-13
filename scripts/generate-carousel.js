@@ -29,6 +29,88 @@ const STYLE_MODULES = {
   'old-money-80s': path.join(__dirname, 'styles', 'old-money-80s.js'),
 };
 
+// ─── Text overlay via sharp + SVG ─────────────────────────────────────────────
+
+function escXml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function wrapWords(text, maxChars) {
+  const words = text.split(' ');
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if ((cur + ' ' + w).trim().length > maxChars) {
+      if (cur) lines.push(cur.trim());
+      cur = w;
+    } else {
+      cur = (cur + ' ' + w).trim();
+    }
+  }
+  if (cur) lines.push(cur.trim());
+  return lines;
+}
+
+async function addTextOverlay(imageBuffer, headline, body, w, h) {
+  const hLines  = wrapWords(headline, 22);
+  const bLines  = wrapWords(body, 42);
+
+  const hSize   = 86;   // headline px
+  const bSize   = 36;   // body px
+  const hLead   = 96;   // headline line-height
+  const bLead   = 46;   // body line-height
+  const gap     = 22;   // gap between headline and body
+  const marginB = 90;   // distance from image bottom
+
+  const blockH  = hLines.length * hLead + gap + bLines.length * bLead;
+  let y         = h - marginB - blockH;
+
+  // Dark gradient behind text (bottom 40% of image) for readability
+  const gradH   = Math.round(h * 0.42);
+  const gradSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="black" stop-opacity="0"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.68"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="${h - gradH}" width="${w}" height="${gradH}" fill="url(#g)"/>
+  </svg>`;
+
+  // Text SVG
+  let textElems = '';
+  for (const line of hLines) {
+    textElems += `<text x="${w / 2}" y="${y}" class="h">${escXml(line)}</text>\n`;
+    y += hLead;
+  }
+  y += gap;
+  for (const line of bLines) {
+    textElems += `<text x="${w / 2}" y="${y}" class="b">${escXml(line)}</text>\n`;
+    y += bLead;
+  }
+
+  const textSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <style>
+      .h { font-family: 'Didot','Times New Roman',Georgia,serif; font-size:${hSize}px; font-weight:700;
+           fill:white; text-anchor:middle; dominant-baseline:auto; }
+      .b { font-family: 'Times New Roman',Georgia,serif; font-size:${bSize}px; font-weight:400;
+           fill:white; text-anchor:middle; dominant-baseline:auto; }
+    </style>
+    ${textElems}
+  </svg>`;
+
+  return sharp(imageBuffer)
+    .composite([
+      { input: Buffer.from(gradSvg), blend: 'over' },
+      { input: Buffer.from(textSvg), blend: 'over' },
+    ])
+    .toBuffer();
+}
+
 function getClient() {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
@@ -156,7 +238,15 @@ async function main() {
 
     // Dark styles need dark padding (not cream)
     if (styleName === 'old-money-80s') {
-      bgColor = { r: 10, g: 10, b: 15, alpha: 1 }; // near-black
+      bgColor = { r: 10, g: 10, b: 15, alpha: 1 };
+    }
+
+    // Styles that use text overlay: prompts are slide objects { photoPrompt, headline, body }
+    // Normalise to always have { photoPrompt, headline, body } even for plain-string prompts
+    if (styleModule.useTextOverlay) {
+      prompts = prompts.map(p =>
+        typeof p === 'string' ? { photoPrompt: p, headline: '', body: '' } : p
+      );
     }
 
   } else if (singlePrompt) {
@@ -217,7 +307,12 @@ STYLE: Minimalist Instagram carousel slide. Clean off-white background with subt
   const results = [];
 
   for (let i = 0; i < prompts.length; i++) {
-    const prompt = prompts[i];
+    const slide    = prompts[i];
+    // Support both plain strings and slide objects { photoPrompt, headline, body }
+    const prompt   = typeof slide === 'string' ? slide : slide.photoPrompt;
+    const headline = typeof slide === 'object' ? slide.headline : '';
+    const body     = typeof slide === 'object' ? slide.body     : '';
+
     const fname = `slide-${String(i + 1).padStart(2, '0')}.png`;
     const fpath = path.join(outDir, fname);
 
@@ -235,12 +330,55 @@ STYLE: Minimalist Instagram carousel slide. Clean off-white background with subt
       // Light styles use 'contain' (pad with bg color, no crop).
       const resizeFit = bgColor.r < 50 ? 'cover' : 'contain';
       console.error(`  source is ${meta.width}x${meta.height}; normalizing to ${targetW}x${targetH} (${resizeFit})`);
-      const normalizedBuffer = await sharp(buffer)
-        .resize(targetW, targetH, { fit: resizeFit, background: bgColor })
-        .png()
-        .toBuffer();
 
-      fs.writeFileSync(fpath, normalizedBuffer);
+      // Trim any uniform border Gemini adds (Polaroid/frame effect) before resizing
+      const trimmed = styleName === 'old-money-80s'
+        ? await sharp(buffer).trim({ threshold: 20 }).toBuffer()
+        : buffer;
+
+      let pipeline = sharp(trimmed).resize(targetW, targetH, { fit: resizeFit, background: bgColor });
+
+      // For old-money-80s: apply aged film look post-processing — forces the vintage feel
+      // regardless of what Gemini returns.
+      if (styleName === 'old-money-80s') {
+        // 1) Slight desaturation + gentle warm amber cast of aged Ektachrome
+        pipeline = pipeline
+          .modulate({ saturation: 0.88, brightness: 0.97 })
+          // 2) Slight tonal compression — kill pure blacks/whites (aged film look)
+          .linear(0.94, 4);
+
+        // 3) Subtle warm tint via RGB linear curves: boost R slightly, reduce B slightly
+        //    (this mimics the warm color shift of aged 80s color film without washing out)
+        pipeline = pipeline.recomb([
+          [1.04, 0,    0   ],
+          [0,    1.0,  0   ],
+          [0,    0,    0.94],
+        ]);
+
+        // 4) Grain overlay — subtle monochrome noise composited on top
+        const noiseW = targetW, noiseH = targetH;
+        const noisePixels = Buffer.alloc(noiseW * noiseH * 4);
+        for (let p = 0; p < noisePixels.length; p += 4) {
+          const v = 128 + (Math.random() - 0.5) * 50;
+          noisePixels[p] = v; noisePixels[p + 1] = v; noisePixels[p + 2] = v;
+          noisePixels[p + 3] = 28; // ~11% alpha — present but subtle
+        }
+        const noiseBuf = await sharp(noisePixels, {
+          raw: { width: noiseW, height: noiseH, channels: 4 },
+        }).png().toBuffer();
+
+        pipeline = pipeline.composite([{ input: noiseBuf, blend: 'overlay' }]);
+      }
+
+      let finalBuffer = await pipeline.png().toBuffer();
+
+      // Text overlay for styles that use programmatic text (useTextOverlay)
+      if (headline) {
+        console.error(`  overlaying text: "${headline}"`);
+        finalBuffer = await addTextOverlay(finalBuffer, headline, body, targetW, targetH);
+      }
+
+      fs.writeFileSync(fpath, finalBuffer);
       results.push({ slide: i + 1, file: fpath, prompt: prompt.slice(0, 120), success: true });
       console.error(`  saved ${fpath}`);
     } catch (err) {

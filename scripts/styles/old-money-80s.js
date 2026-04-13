@@ -29,52 +29,36 @@ const SCENES = [
   'A man in a 1987 power suit seen from behind, walking away down a long empty marble corridor of a bank, the corridor receding into deep shadow. Single overhead tungsten lamp casting a long hard shadow on the floor ahead of him.',
 ];
 
-const PHOTO_STYLE = `Film still from a 1987 American drama. 35mm anamorphic Panavision. Cinematography by Robert Richardson (Wall Street, 1987). Kodak 5247 film stock.
+const PHOTO_STYLE = `A color photograph from 1986 that has aged 40 years. Shot on Ektachrome 200 or Kodachrome slide film, scanned from a faded physical print or slide that has been sitting in an archive since the Reagan administration.
 
-Color and light — mandatory:
-• Warm tungsten interior 2400K vs cool blue-grey exterior window light — this color temperature war defines every frame
-• Deep inky black shadows with zero detail — NO fill light, NO bounce, nothing in the shadows
-• Slight halation and bloom around practical light sources (desk lamps, office lamps)
-• Horizontal anamorphic lens flare streaks from window edges
-• Oval bokeh in out-of-focus background highlights
-• Venetian blind shadow bars across suits and walls where applicable
-• Visible 35mm grain — organic, textural, part of the aesthetic
-• Skin tones pushed slightly warm/copper in the light
+CRITICAL — the image must look AGED and DEGRADED, not clean or cinematic:
+• Strong color shift from aging — slight magenta cast in shadows, yellow-amber tint in highlights (typical of 1980s Ektachrome that has faded)
+• Slightly washed-out, low saturation — the color has drifted and faded with time
+• Visible organic film grain throughout, especially in dark areas — this is REAL 35mm grain, not clean
+• Slight softness and loss of detail — the image is not sharp, not modern, not tack-sharp digital
+• Tonal compression — no bright whites, no pure blacks, everything slightly muddy and aged
+• Slight color fringing and halation around bright areas
+• The photograph looks like it was taken with a consumer 35mm SLR of the era, not a movie camera
 
-Mood: 1987 Manhattan. Ambition, power, isolation. The visual language of Gordon Gekko. Cinematic, designed, deliberate — every shadow is intentional.
+Lighting: mostly warm tungsten interior tones, slightly greenish fluorescent where applicable, naturally dim.
 
-NOT a photograph. NOT press photography. NOT AI art. NOT modern color grading. A 35mm film still.`;
+The overall feel is NOSTALGIC and AGED — like flipping through a photo album from 1986. NOT a modern high-quality image. NOT cinematic or polished. NOT clean. It has the unmistakable visual signature of 1980s color photography that has survived for decades.
 
-const TEXT_STYLE = `TEXT OVERLAY — the text is typeset directly onto the photograph, like a magazine editorial layout. It looks printed, not digitally overlaid:
+NOT AI art. NOT modern photography. NOT HDR. NOT color-graded. NOT sharp. An aged snapshot from 1986.`;
 
-Headline: large bold white serif (Didot or Times New Roman, very heavy weight), 2–5 words, centered horizontally in the lower third of the image. The headline text has very slight grain/texture matching the film grain of the photo — it reads as ink printed on a photograph.
-
-Body text: white serif, smaller size, 2–4 lines, slightly looser line spacing, centered. Plain and direct language explaining the concept. Same slight grain texture as the headline.
-
-CRITICAL: text must sit over the darkest area of the photo for contrast. NO colored boxes, NO semi-transparent backgrounds, NO drop shadows, NO glows behind the text. NO brand name or watermark anywhere. The film grain and dark photo provide all the contrast needed. The text looks like it belongs to the photograph, not pasted on top.`;
-
-const FORMAT = `FORMAT: Vertical 4:5 portrait, 1080x1350px. Full bleed photograph, edge to edge — NO white borders, NO frames, NO margins, NO padding. NO magazine UI, NO app interface, NO browser chrome, NO publication header or footer anywhere in the image. SAFE ZONES: All text within the central 80% of the frame, never in the top or bottom 10%.`;
+const FORMAT = `FORMAT: Vertical 4:5 portrait, 1080x1350px. The photograph fills every single pixel — FULL BLEED, edge to edge, zero borders, zero frames, zero margins, zero padding, zero white space around the image. The image starts at the very corner of the canvas. NO Polaroid frame. NO photo border. NO white surround. NO cream frame. NO vignette border. NO publication headers or footers. NO text, NO captions, NO words — text will be added separately.`;
 
 /**
- * Build a full Nano Banana prompt for one slide.
- * @param {string} headline - Short bold headline (2-4 words)
- * @param {string} body - 1-3 sentence explanation
- * @param {number} slideIndex - 0-based index, used to pick scene variety
- * @param {string} [brand='WEALTHMAIA'] - Brand name shown at bottom
+ * Build a photo-only prompt (text overlay is handled by sharp, not Gemini).
+ * Returns a slide object: { photoPrompt, headline, body }
  */
-function buildPrompt(headline, body, slideIndex = 0, brand = 'WEALTHMAIA') {
+function buildSlide(headline, body, slideIndex = 0) {
   const scene = SCENES[slideIndex % SCENES.length];
-  return `${FORMAT}
-
-SCENE: ${scene}.
-
-PHOTOGRAPHY: ${PHOTO_STYLE}
-
-${TEXT_STYLE}
-
-CONTENT TO SHOW ON THE SLIDE:
-Headline (large bold white serif): "${headline}"
-Body text (smaller white serif, 2-3 lines below): "${body}"`;
+  return {
+    photoPrompt: `${FORMAT}\n\nSCENE: ${scene}.\n\nPHOTOGRAPHY: ${PHOTO_STYLE}`,
+    headline,
+    body,
+  };
 }
 
 /**
@@ -82,26 +66,20 @@ Body text (smaller white serif, 2-3 lines below): "${body}"`;
  *   Headline | Body text
  * Lines starting with # are comments. Blank lines skipped.
  */
-function parseContentFile(text, brand = 'WEALTHMAIA') {
+function parseContentFile(text) {
   return text
     .split('\n')
     .map(l => l.trim())
     .filter(l => l && !l.startsWith('#'))
     .map((line, i) => {
       const sep = line.indexOf('|');
-      if (sep === -1) {
-        // No separator — treat whole line as headline with empty body
-        return buildPrompt(line.trim(), '', i, brand);
-      }
-      const headline = line.slice(0, sep).trim();
-      const body = line.slice(sep + 1).trim();
-      return buildPrompt(headline, body, i, brand);
+      if (sep === -1) return buildSlide(line.trim(), '', i);
+      return buildSlide(line.slice(0, sep).trim(), line.slice(sep + 1).trim(), i);
     });
 }
 
 /**
  * Default 5-slide WealthMaia carousel in old-money-80s style.
- * Used when --style old-money-80s is passed without --content.
  */
 function defaultPrompts(brand = 'WEALTHMAIA') {
   const slides = [
@@ -111,7 +89,7 @@ function defaultPrompts(brand = 'WEALTHMAIA') {
     ['Deuda Neta / EBITDA', `Mide cuántos años tardaría la empresa en pagar su deuda con sus beneficios actuales. Por encima de 3x, hay riesgo.`],
     ['Empieza a leer los números', `La IA de ${brand} analiza los estados financieros por ti. Toma decisiones con datos, no con intuición.`],
   ];
-  return slides.map(([h, b], i) => buildPrompt(h, b, i, brand));
+  return slides.map(([h, b], i) => buildSlide(h, b, i));
 }
 
-module.exports = { buildPrompt, parseContentFile, defaultPrompts, SCENES };
+module.exports = { buildSlide, parseContentFile, defaultPrompts, SCENES, useTextOverlay: true };
