@@ -25,6 +25,10 @@ const GENERATED_DIR = path.join(__dirname, '..', 'generated');
 const INSPIRATIONS_DIR = path.join(__dirname, '..', 'inspirations');
 const INDEX_FILE = path.join(INSPIRATIONS_DIR, 'index.json');
 
+const STYLE_MODULES = {
+  'old-money-80s': path.join(__dirname, 'styles', 'old-money-80s.js'),
+};
+
 function getClient() {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
@@ -101,12 +105,18 @@ async function main() {
   let promptsFile = null;
   let singlePrompt = null;
   let fromInspiration = null;
+  let styleName = null;
+  let contentFile = null;
+  let brand = 'WEALTHMAIA';
   let name = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--prompts' && args[i + 1]) { promptsFile = args[i + 1]; i++; }
     else if (args[i] === '--prompt' && args[i + 1]) { singlePrompt = args[i + 1]; i++; }
     else if (args[i] === '--from' && args[i + 1]) { fromInspiration = args[i + 1]; i++; }
+    else if (args[i] === '--style' && args[i + 1]) { styleName = args[i + 1]; i++; }
+    else if (args[i] === '--content' && args[i + 1]) { contentFile = args[i + 1]; i++; }
+    else if (args[i] === '--brand' && args[i + 1]) { brand = args[i + 1]; i++; }
     else if (args[i] === '--name' && args[i + 1]) { name = args[i + 1]; i++; }
   }
 
@@ -118,8 +128,38 @@ async function main() {
   // Prepare prompts
   let prompts = [];
   let referenceImages = [];
+  let bgColor = { r: 245, g: 243, b: 234, alpha: 1 }; // default cream
 
-  if (singlePrompt) {
+  // --style mode: load a built-in style module
+  if (styleName) {
+    const modulePath = STYLE_MODULES[styleName];
+    if (!modulePath || !fs.existsSync(modulePath)) {
+      console.error(`Unknown style: "${styleName}". Available: ${Object.keys(STYLE_MODULES).join(', ')}`);
+      process.exit(1);
+    }
+    const styleModule = require(modulePath);
+
+    if (contentFile) {
+      if (!fs.existsSync(contentFile)) {
+        console.error(`Content file not found: ${contentFile}`);
+        process.exit(1);
+      }
+      const text = fs.readFileSync(contentFile, 'utf8');
+      prompts = styleModule.parseContentFile(text, brand);
+      console.error(`[generate] Style: ${styleName} | ${prompts.length} slides from ${contentFile}`);
+    } else if (singlePrompt) {
+      prompts = [singlePrompt];
+    } else {
+      prompts = styleModule.defaultPrompts(brand);
+      console.error(`[generate] Style: ${styleName} | ${prompts.length} default slides`);
+    }
+
+    // Dark styles need dark padding (not cream)
+    if (styleName === 'old-money-80s') {
+      bgColor = { r: 10, g: 10, b: 15, alpha: 1 }; // near-black
+    }
+
+  } else if (singlePrompt) {
     prompts = [singlePrompt];
   } else if (promptsFile) {
     if (!fs.existsSync(promptsFile)) {
@@ -189,7 +229,6 @@ STYLE: Minimalist Instagram carousel slide. Clean off-white background with subt
       // or off-spec dimensions, which causes Instagram to crop the edges.
       const targetW = 1080;
       const targetH = 1350;
-      const bgColor = { r: 245, g: 243, b: 234, alpha: 1 }; // #F5F3EA — matches our cream style
 
       const meta = await sharp(buffer).metadata();
       console.error(`  source is ${meta.width}x${meta.height}; normalizing to ${targetW}x${targetH} (pad if needed)`);

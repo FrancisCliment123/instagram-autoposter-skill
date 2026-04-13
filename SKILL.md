@@ -68,7 +68,8 @@ The CLI scripts below still work — the GUI is just a friendly wrapper.
 | `quick-analyze.js` | **Fastest path**: pass any IG URL, get per-slide breakdown + adaptation brief in one step — no prior save needed |
 | `save-inspiration.js` | Save a public IG post URL you want to learn from |
 | `analyze-inspiration.js` | Download slides + run Gemini Vision to extract hook, style, structure, and an adaptation brief for your brand |
-| `generate-carousel.js` | Generate a new carousel with Nano Banana 2 (Gemini 3.1 Flash Image) using the inspiration's style as guidance |
+| `generate-carousel.js` | Generate a new carousel with Nano Banana 2 (Gemini 3.1 Flash Image) using the inspiration's style as guidance. Supports `--style old-money-80s` for cinematic 1980s Wall Street aesthetic |
+| `scripts/styles/old-money-80s.js` | Style module: cinematic 1980s financial photography (dark chiaroscuro, bold white Didot serif text) |
 | `slides-to-reel.js` | Convert carousel slides into a 9:16 MP4 for Reels |
 | `post.js` | Publish a photo, video, reel, or carousel through the bot browser (no music — web limitation) |
 | `stage-carousel.js` | Prepare a carousel for **mobile publishing with trending music** (web can't add music) — drops everything into a cloud-synced folder so you can finish from your phone in ~60 seconds |
@@ -147,6 +148,18 @@ Downloads every slide to `inspirations/ABC123/` and calls Gemini Vision. Output 
 
 ```bash
 node scripts/generate-carousel.js --from ABC123 --name my-first-post
+```
+
+**Old Money 80s style** (cinematic 1980s Wall Street, dark chiaroscuro, bold white Didot serif):
+```bash
+# Default 5-slide WealthMaia carousel
+node scripts/generate-carousel.js --style old-money-80s --name my-carousel
+
+# Custom content file (one slide per line: "Headline | Body text")
+node scripts/generate-carousel.js --style old-money-80s --content slides.txt --name my-carousel
+
+# Different brand
+node scripts/generate-carousel.js --style old-money-80s --brand MIBRAND --name my-carousel
 ```
 
 Produces 5 slides in `generated/my-first-post/slide-NN.png` using Nano Banana 2 (`gemini-3.1-flash-image-preview`).
