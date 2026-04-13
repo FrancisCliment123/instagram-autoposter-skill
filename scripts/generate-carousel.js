@@ -231,11 +231,12 @@ STYLE: Minimalist Instagram carousel slide. Clean off-white background with subt
       const targetH = 1350;
 
       const meta = await sharp(buffer).metadata();
-      console.error(`  source is ${meta.width}x${meta.height}; normalizing to ${targetW}x${targetH} (pad if needed)`);
-      // ALWAYS use 'contain' so we never crop. If the source ratio is off,
-      // we pad with the cream background color — no pixels are lost.
+      // Dark/full-bleed styles use 'cover' (no padding, slight crop if ratio is off).
+      // Light styles use 'contain' (pad with bg color, no crop).
+      const resizeFit = bgColor.r < 50 ? 'cover' : 'contain';
+      console.error(`  source is ${meta.width}x${meta.height}; normalizing to ${targetW}x${targetH} (${resizeFit})`);
       const normalizedBuffer = await sharp(buffer)
-        .resize(targetW, targetH, { fit: 'contain', background: bgColor })
+        .resize(targetW, targetH, { fit: resizeFit, background: bgColor })
         .png()
         .toBuffer();
 

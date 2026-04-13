@@ -51,11 +51,9 @@ Headline: large bold white serif (Didot or Times New Roman, very heavy weight), 
 
 Body text: white serif, smaller size, 2–4 lines, slightly looser line spacing, centered. Plain and direct language explaining the concept. Same slight grain texture as the headline.
 
-Brand wordmark: small all-caps white sans-serif at the very bottom center. Clean and minimal.
+CRITICAL: text must sit over the darkest area of the photo for contrast. NO colored boxes, NO semi-transparent backgrounds, NO drop shadows, NO glows behind the text. NO brand name or watermark anywhere. The film grain and dark photo provide all the contrast needed. The text looks like it belongs to the photograph, not pasted on top.`;
 
-CRITICAL: text must sit over the darkest area of the photo for contrast. NO colored boxes, NO semi-transparent backgrounds, NO drop shadows, NO glows behind the text. The film grain and dark photo provide all the contrast needed. The text looks like it belongs to the photograph, not pasted on top.`;
-
-const FORMAT = `FORMAT: Vertical 4:5 portrait, 1080x1350px. SAFE ZONES: All text and subjects within the central 80% of the frame. Leave at minimum 120px empty margin on all sides. The top 10% and bottom 16% will be covered by Instagram UI — NEVER place text or key elements there.`;
+const FORMAT = `FORMAT: Vertical 4:5 portrait, 1080x1350px. The photograph fills the ENTIRE frame edge to edge — NO white borders, NO cream frames, NO margins, NO padding around the image. Full bleed, no frame. SAFE ZONES: All text within the central 80% of the frame. The top 10% and bottom 10% will be covered by Instagram UI — NEVER place text or key elements there.`;
 
 /**
  * Build a full Nano Banana prompt for one slide.
@@ -72,12 +70,11 @@ SCENE: ${scene}.
 
 PHOTOGRAPHY: ${PHOTO_STYLE}
 
-${TEXT_STYLE.replace('WEALTHMAIA', brand)}
+${TEXT_STYLE}
 
 CONTENT TO SHOW ON THE SLIDE:
 Headline (large bold white serif): "${headline}"
-Body text (smaller white serif, 2-3 lines below): "${body}"
-Bottom wordmark: "${brand}"`;
+Body text (smaller white serif, 2-3 lines below): "${body}"`;
 }
 
 /**
