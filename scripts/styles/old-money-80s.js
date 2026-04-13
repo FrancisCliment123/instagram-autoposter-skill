@@ -17,25 +17,33 @@
  */
 
 const SCENES = [
-  'A 52-year-old man in a charcoal wool suit, viewed from behind, standing at a floor-to-ceiling office window overlooking a grey overcast Manhattan skyline in winter light. Single window light source from the right, face in shadow, rim light on jaw. Leica M4-P, 50mm Summicron, Kodachrome 64, slight underexposure',
-  'A 45-year-old man in a dark navy double-breasted suit, profile view facing left, holding a heavy desk phone handset to ear, seated at a mahogany desk with stacked papers and an ashtray. Banker\'s lamp tungsten light below left, warm amber pool on desk, face half in shadow. Nikon F3, 85mm f/1.8, Tri-X 400',
-  'Dense crowd of men in dark suits and loosened ties on the NYSE trading floor, one figure in foreground slightly taller with back to camera, paper slips covering the floor. Overhead fluorescent light, deep shadow pockets, slight motion blur on gesturing hands. Nikon F2A, 28mm f/2.8, Tri-X 400 pushed',
-  'Close-up: hands of a man in a suit jacket, one hand holding a pen, reviewing printed financial spreadsheets on a mahogany desk. Banker\'s lamp tungsten from the left, papers overexposed in the light, foreground in deep shadow. Nikon F3, 50mm macro, Kodak Tri-X',
-  'A 40-year-old man in a dark pinstripe power suit, viewed from behind and slightly right, standing on the NYSE trading floor amid chaotic paper slips. Harsh overhead fluorescent light, deep foreground shadow, specular highlight on shoulder seam. Nikon F3, 35mm f/2.8',
-  'Three men in dark overcoats walking away from camera on a grey Manhattan sidewalk, briefcases in hand, steam rising from a street vent behind them. Overcast winter light, flat cold 5500K daylight, grey tones, slight motion blur from walking pace. Leica M4-P, 35mm Summaron, Tri-X 400',
-  'A lone figure in a pinstripe suit walking away down a long empty marble corridor of a Wall Street bank, back to camera, the corridor receding into deep shadow. Single overhead tungsten lamp, strong directional shadow on floor. Nikon F3, 28mm f/2.8',
-  'A 1980s trading room at night, rows of glowing green computer terminal screens, one trader seated with his back to the camera surrounded by printed ticker tape on the floor. Low ambient green-tinted light, deep shadow everywhere else. Nikon F3, 35mm f/2',
-  'A 58-year-old man with greying temples in a charcoal pinstripe suit, three-quarter view facing slightly away from camera, seated at a large desk. Dark background, almost black. Single hard sidelight left, deep shadow right side, subtle rim light on shoulder. Hasselblad 500CM, 80mm Planar, Tri-X',
-  'A man in a 1980s suit sitting back in a leather executive chair, feet up, holding a corded phone, seen from the side, city skyline through the window at dusk. Desk lamp amber glow, window blue-grey, face turned away. Nikon F3, 50mm f/1.4, Ektachrome 200',
+  'A man in a 1987 double-breasted pinstripe suit seen from behind, standing at floor-to-ceiling office windows, 40th floor Manhattan. Near-silhouette against cool overcast grey-blue sky and distant skyscrapers. Interior warm amber from a desk lamp at left frame. Venetian blind shadow bars across his back and shoulders. Warm-to-cool color temperature war. No face visible.',
+  'Interior night. Corner office, Manhattan high-rise. A figure in a dark suit at a large mahogany desk, seen from the side, face turned away. Single brass desk lamp warm amber key light 2400K. Floor-to-ceiling windows behind: cool blue-grey Manhattan night skyline. Warm/cool split down center of frame. IBM PC and phone handset with coiled cord on desk.',
+  'Wide shot, New York Stock Exchange trading floor, 1987. Dozens of traders in colored jackets in mid-motion, papers in the air. Overhead practical tungsten — warm amber-gold spilling down. CRT screens casting green phosphor light from below. Ticker tape and paper in motion blur. Background traders soft from 85mm compression.',
+  'Close-up of a man\'s torso and hand: white dress shirt, bold red suspenders, one hand gripping a telephone handset with coiled cord. Warm desk lamp from below-left catches white shirt in amber. Deep shadow across upper chest. Background pure black with single out-of-focus CRT green glow at right edge. Gold cufflink catching light. No face in frame.',
+  'Two men in dark suits and overcoats walking through revolving brass doors of a Wall Street building. Shot from outside. Warm amber lobby glow behind them, cool grey overcast daylight in foreground. Both figures slightly backlit. Faces not clearly visible. Steam in cold air.',
+  'Street-level Lower Manhattan. Overcast noon, flat cold blue-white natural light. Two men in dark overcoats with briefcases moving through frame, slight motion blur. One man\'s face half-lit by warm storefront window. Steam from a street grate. Near-monochromatic steel grey and blue with one single warm amber intrusion.',
+  'A man in a double-breasted suit sitting back in a deep leather executive chair, feet up on a mahogany desk, holding a corded phone to his ear. Seen from the side, face turned away. Desk lamp warm amber pool. Manhattan skyline through the window at dusk — cool blue against warm interior.',
+  'A 1980s trading room at night, rows of glowing green CRT terminal screens in darkness. One lone trader seated with his back to camera, surrounded by ticker tape on the floor. Green phosphor ambient light the only source. Deep shadow everywhere else.',
+  'Empty conference room, classical Wall Street architecture, marble columns. A lone man in a pinstripe suit stands at the head of a long mahogany table reviewing documents. City visible through tall windows, cool grey morning light. Long shadows across the table.',
+  'A man in a 1987 power suit seen from behind, walking away down a long empty marble corridor of a bank, the corridor receding into deep shadow. Single overhead tungsten lamp casting a long hard shadow on the floor ahead of him.',
 ];
 
-const PHOTO_STYLE = `AP wire photograph, circa 1986. Shot on Kodak Tri-X 400 pushed to ISO 1600, Nikon F3 with 35mm f/2.8 Nikkor lens. Press photography by a photojournalist covering Wall Street for Fortune magazine or BusinessWeek, 1985 issue.
+const PHOTO_STYLE = `Film still from a 1987 American drama. 35mm anamorphic Panavision. Cinematography by Robert Richardson (Wall Street, 1987). Kodak 5247 film stock.
 
-Technical: heavy organic film grain from push development (directional, silver-based, non-uniform — NOT digital noise), crushed blacks, slight halation around light sources, depth-of-field fall-off at edges, slight chromatic aberration at corners, natural lens vignette. 5:1 contrast ratio, no fill light. Single hard light source only.
+Color and light — mandatory:
+• Warm tungsten interior 2400K vs cool blue-grey exterior window light — this color temperature war defines every frame
+• Deep inky black shadows with zero detail — NO fill light, NO bounce, nothing in the shadows
+• Slight halation and bloom around practical light sources (desk lamps, office lamps)
+• Horizontal anamorphic lens flare streaks from window edges
+• Oval bokeh in out-of-focus background highlights
+• Venetian blind shadow bars across suits and walls where applicable
+• Visible 35mm grain — organic, textural, part of the aesthetic
+• Skin tones pushed slightly warm/copper in the light
 
-Mood: cold, serious, documentary. The photograph was taken in a real moment by a real press photographer. No posing. No studio lighting. Available light only.
+Mood: 1987 Manhattan. Ambition, power, isolation. The visual language of Gordon Gekko. Cinematic, designed, deliberate — every shadow is intentional.
 
-NOT AI art. NOT a modern photo. NOT HDR. NOT color-graded. NOT a photo with a filter applied. This is an authentic archival press photograph.`;
+NOT a photograph. NOT press photography. NOT AI art. NOT modern color grading. A 35mm film still.`;
 
 const TEXT_STYLE = `TEXT OVERLAY — the text is typeset directly onto the photograph, like a magazine editorial layout. It looks printed, not digitally overlaid:
 
