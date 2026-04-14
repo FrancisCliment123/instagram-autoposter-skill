@@ -26,7 +26,8 @@ const INSPIRATIONS_DIR = path.join(__dirname, '..', 'inspirations');
 const INDEX_FILE = path.join(INSPIRATIONS_DIR, 'index.json');
 
 const STYLE_MODULES = {
-  'old-money-80s': path.join(__dirname, 'styles', 'old-money-80s.js'),
+  'old-money-80s':  path.join(__dirname, 'styles', 'old-money-80s.js'),
+  'quiet-luxury':   path.join(__dirname, 'styles', 'quiet-luxury.js'),
 };
 
 // ─── Text overlay via sharp + SVG ─────────────────────────────────────────────
@@ -56,26 +57,26 @@ function wrapWords(text, maxChars) {
 }
 
 async function addTextOverlay(imageBuffer, headline, body, w, h) {
-  const hLines  = wrapWords(headline, 22);
-  const bLines  = wrapWords(body, 42);
+  const hLines  = wrapWords(headline, 26);
+  const bLines  = wrapWords(body, 46);
 
-  const hSize   = 86;   // headline px
-  const bSize   = 36;   // body px
-  const hLead   = 96;   // headline line-height
-  const bLead   = 46;   // body line-height
-  const gap     = 22;   // gap between headline and body
-  const marginB = 90;   // distance from image bottom
+  const hSize   = 58;   // headline px — iOS/clean feel
+  const bSize   = 26;   // body px
+  const hLead   = 68;   // headline line-height
+  const bLead   = 36;   // body line-height
+  const gap     = 16;   // gap between headline and body
+  const marginB = 80;   // distance from image bottom
 
   const blockH  = hLines.length * hLead + gap + bLines.length * bLead;
   let y         = h - marginB - blockH;
 
   // Dark gradient behind text (bottom 40% of image) for readability
-  const gradH   = Math.round(h * 0.42);
+  const gradH   = Math.round(h * 0.40);
   const gradSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="black" stop-opacity="0"/>
-        <stop offset="100%" stop-color="black" stop-opacity="0.68"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.62"/>
       </linearGradient>
     </defs>
     <rect x="0" y="${h - gradH}" width="${w}" height="${gradH}" fill="url(#g)"/>
@@ -95,10 +96,10 @@ async function addTextOverlay(imageBuffer, headline, body, w, h) {
 
   const textSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
     <style>
-      .h { font-family: 'Didot','Times New Roman',Georgia,serif; font-size:${hSize}px; font-weight:700;
-           fill:white; text-anchor:middle; dominant-baseline:auto; }
-      .b { font-family: 'Times New Roman',Georgia,serif; font-size:${bSize}px; font-weight:400;
-           fill:white; text-anchor:middle; dominant-baseline:auto; }
+      .h { font-family: -apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:${hSize}px; font-weight:600;
+           fill:white; text-anchor:middle; dominant-baseline:auto; letter-spacing:-0.5px; }
+      .b { font-family: -apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:${bSize}px; font-weight:300;
+           fill:rgba(255,255,255,0.82); text-anchor:middle; dominant-baseline:auto; }
     </style>
     ${textElems}
   </svg>`;
@@ -237,7 +238,7 @@ async function main() {
     }
 
     // Dark styles need dark padding (not cream)
-    if (styleName === 'old-money-80s') {
+    if (styleName === 'old-money-80s' || styleName === 'quiet-luxury') {
       bgColor = { r: 10, g: 10, b: 15, alpha: 1 };
     }
 
