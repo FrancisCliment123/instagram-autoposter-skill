@@ -28,6 +28,7 @@ const INDEX_FILE = path.join(INSPIRATIONS_DIR, 'index.json');
 const STYLE_MODULES = {
   'old-money-80s':  path.join(__dirname, 'styles', 'old-money-80s.js'),
   'quiet-luxury':   path.join(__dirname, 'styles', 'quiet-luxury.js'),
+  'photoreal':      path.join(__dirname, 'styles', 'photoreal.js'),
 };
 
 // ─── Text overlay via sharp + SVG ─────────────────────────────────────────────
@@ -56,27 +57,41 @@ function wrapWords(text, maxChars) {
   return lines;
 }
 
-async function addTextOverlay(imageBuffer, headline, body, w, h) {
-  const hLines  = wrapWords(headline, 26);
-  const bLines  = wrapWords(body, 46);
+async function addTextOverlay(imageBuffer, headline, body, w, h, textStyle = {}) {
+  // Per-style overrides (each style module can export its own textStyle).
+  // Defaults match the iOS/Helvetica look used by quiet-luxury / photoreal.
+  const defaultFamily = "-apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif";
+  const hFamily       = textStyle.headlineFamily || textStyle.fontFamily || defaultFamily;
+  const bFamily       = textStyle.bodyFamily     || textStyle.fontFamily || defaultFamily;
+  const hLetterSp     = textStyle.headlineLetterSpacing || textStyle.letterSpacing || '-0.5px';
+  const bLetterSp     = textStyle.bodyLetterSpacing     || textStyle.letterSpacing || '-0.2px';
+  const hWeight       = textStyle.headlineWeight || 600;
+  const bWeight       = textStyle.bodyWeight     || 300;
+  const wrapH         = textStyle.wrapHeadline  || 26;
+  const wrapB         = textStyle.wrapBody      || 46;
 
-  const hSize   = 58;   // headline px — iOS/clean feel
-  const bSize   = 26;   // body px
-  const hLead   = 68;   // headline line-height
-  const bLead   = 36;   // body line-height
-  const gap     = 16;   // gap between headline and body
-  const marginB = 80;   // distance from image bottom
+  const hLines  = wrapWords(headline, wrapH);
+  const bLines  = wrapWords(body, wrapB);
+
+  const hSize   = textStyle.headlineSize || 46;
+  const bSize   = textStyle.bodySize     || 22;
+  const hLead   = Math.round(hSize * 1.17);
+  const bLead   = Math.round(bSize * 1.36);
+  const gap     = 16;
+  const marginB = 80;
 
   const blockH  = hLines.length * hLead + gap + bLines.length * bLead;
   let y         = h - marginB - blockH;
 
-  // Dark gradient behind text (bottom 40% of image) for readability
-  const gradH   = Math.round(h * 0.40);
+  // Dark gradient behind text (bottom 55% of image) for readability.
+  // S-curve via intermediate stops keeps the fade soft, not a hard block.
+  const gradH   = Math.round(h * 0.55);
   const gradSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="black" stop-opacity="0"/>
-        <stop offset="100%" stop-color="black" stop-opacity="0.62"/>
+        <stop offset="0%"   stop-color="black" stop-opacity="0"/>
+        <stop offset="55%"  stop-color="black" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.82"/>
       </linearGradient>
     </defs>
     <rect x="0" y="${h - gradH}" width="${w}" height="${gradH}" fill="url(#g)"/>
@@ -94,12 +109,27 @@ async function addTextOverlay(imageBuffer, headline, body, w, h) {
     y += bLead;
   }
 
+  // Drop shadow filter — subtle dark glow behind text (iOS-style) for
+  // legibility on busy/bright backgrounds without a hard outline.
   const textSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <defs>
+      <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+        <feOffset dx="0" dy="2" result="offsetblur"/>
+        <feComponentTransfer><feFuncA type="linear" slope="0.85"/></feComponentTransfer>
+        <feMerge>
+          <feMergeNode/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
     <style>
-      .h { font-family: -apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:${hSize}px; font-weight:600;
-           fill:white; text-anchor:middle; dominant-baseline:auto; letter-spacing:-0.5px; }
-      .b { font-family: -apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:${bSize}px; font-weight:300;
-           fill:rgba(255,255,255,0.82); text-anchor:middle; dominant-baseline:auto; }
+      .h { font-family:${hFamily}; font-size:${hSize}px; font-weight:${hWeight};
+           fill:white; text-anchor:middle; dominant-baseline:auto; letter-spacing:${hLetterSp};
+           filter:url(#textShadow); }
+      .b { font-family:${bFamily}; font-size:${bSize}px; font-weight:${bWeight};
+           fill:rgba(255,255,255,0.92); text-anchor:middle; dominant-baseline:auto; letter-spacing:${bLetterSp};
+           filter:url(#textShadow); }
     </style>
     ${textElems}
   </svg>`;
@@ -212,6 +242,7 @@ async function main() {
   let prompts = [];
   let referenceImages = [];
   let bgColor = { r: 245, g: 243, b: 234, alpha: 1 }; // default cream
+  let styleTextStyle = {}; // per-style text overrides (font family, sizes, weights)
 
   // --style mode: load a built-in style module
   if (styleName) {
@@ -248,6 +279,11 @@ async function main() {
       prompts = prompts.map(p =>
         typeof p === 'string' ? { photoPrompt: p, headline: '', body: '' } : p
       );
+    }
+
+    // Per-style text overrides (font family, weights, sizes). Optional.
+    if (styleModule.textStyle) {
+      styleTextStyle = styleModule.textStyle;
     }
 
   } else if (singlePrompt) {
@@ -376,7 +412,7 @@ STYLE: Minimalist Instagram carousel slide. Clean off-white background with subt
       // Text overlay for styles that use programmatic text (useTextOverlay)
       if (headline) {
         console.error(`  overlaying text: "${headline}"`);
-        finalBuffer = await addTextOverlay(finalBuffer, headline, body, targetW, targetH);
+        finalBuffer = await addTextOverlay(finalBuffer, headline, body, targetW, targetH, styleTextStyle);
       }
 
       fs.writeFileSync(fpath, finalBuffer);

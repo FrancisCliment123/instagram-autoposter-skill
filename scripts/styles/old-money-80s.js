@@ -92,4 +92,18 @@ function defaultPrompts(brand = 'WEALTHMAIA') {
   return slides.map(([h, b], i) => buildSlide(h, b, i));
 }
 
-module.exports = { buildSlide, parseContentFile, defaultPrompts, SCENES, useTextOverlay: true };
+// Per-style text overrides: editorial pattern — serif headline (Didot/Bodoni/
+// Georgia fallback) + Helvetica body. Same structure as NYT/WSJ/Vogue covers:
+// heavy serif title, clean sans subtitle.
+const textStyle = {
+  headlineFamily: "'Didot','Bodoni 72','Bodoni MT',Georgia,'Times New Roman',serif",
+  bodyFamily:     "-apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif",
+  headlineLetterSpacing: '0px',
+  bodyLetterSpacing:     '0.15px',
+  headlineWeight: 500,
+  bodyWeight:     300,
+  headlineSize:   62,
+  bodySize:       24,
+};
+
+module.exports = { buildSlide, parseContentFile, defaultPrompts, SCENES, useTextOverlay: true, textStyle };

@@ -35,9 +35,15 @@ async function makeReel({ slides, outputPath, duration, bgColor }) {
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg();
 
-    // Each slide gets the same duration — use -loop 1 + -t per input
+    // Each slide gets the same duration — use -loop 1 + -t per input.
+    // inputOptions() applies to the most recently added input, so this keeps
+    // the per-input loop/duration isolated (the earlier .loop(duration) form
+    // only applied to the last input, producing a single-slide video).
     for (const s of slides) {
-      cmd.input(s).loop(duration).inputFPS(30);
+      cmd
+        .input(s)
+        .inputOptions(['-loop', '1', '-t', String(duration)])
+        .inputFPS(30);
     }
 
     // Build a filter graph: scale each to 1080x1350, pad to 1080x1920, then concat
